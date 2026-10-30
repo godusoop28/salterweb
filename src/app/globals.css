@@ -102,6 +102,24 @@
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  /* Evita que un elemento ancho haga que el navegador móvil aleje toda la página. */
+  html,
+  body {
+    overflow-x: clip;
+  }
+  /* Los hijos de grid y flex no deben crecer más que su columna por el contenido. */
+  .grid > *,
+  .flex-1 {
+    min-width: 0;
+  }
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
   }
   body {
     background: var(--brand-background);

@@ -113,7 +113,7 @@ export function ShipmentDetail({ guia }: { guia: string }) {
               {shipment.origin.city} → {shipment.destination.city} · Registrado el {formatDateTime(shipment.createdAt)}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid gap-2 sm:flex sm:flex-wrap">
             {!delivered && (
               <>
                 <Button variant="secondary" icon={<UserRoundCheck className="size-4" />} onClick={() => open("assign")}>

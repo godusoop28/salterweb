@@ -261,7 +261,7 @@ export function DashboardView() {
               </Link>
             }
           />
-          <div className="mt-3 overflow-x-auto">
+          <div className="mt-3 hidden overflow-x-auto md:block">
             <table className="w-full min-w-[560px] text-left">
               <thead>
                 <tr className="border-y border-line-soft bg-canvas/60 text-xs font-bold uppercase tracking-wider text-muted">
@@ -294,6 +294,22 @@ export function DashboardView() {
               </tbody>
             </table>
           </div>
+          <ul className="mt-3 divide-y divide-line-soft border-t border-line-soft md:hidden">
+            {recentDeliveries.map((s) => (
+              <li key={s.id}>
+                <Link href={`/paquetes/${s.guia}`} className="flex flex-col gap-1.5 px-5 py-3.5 active:bg-brand-50/50">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-sm font-bold text-ink">{s.guia}</span>
+                    <span className="text-[13px] text-muted">{relativeTime(s.deliveredAt!)}</span>
+                  </div>
+                  <p className="text-sm font-semibold text-ink">
+                    {s.recipient.name} <span className="font-normal text-muted">· {s.destination.city}</span>
+                  </p>
+                  <p className="text-[13px] text-muted">Repartidor: {state.couriers.find((c) => c.id === s.courierId)?.name}</p>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </Card>
 
         <Card>

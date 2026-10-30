@@ -22,8 +22,8 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-start justify-between gap-3 px-5 pt-5 sm:px-6", className)}>
-      <div className="flex min-w-0 items-start gap-3">
+    <div className={cn("flex flex-wrap items-start justify-between gap-3 px-5 pt-5 sm:px-6", className)}>
+      <div className="flex min-w-0 flex-[1_1_12rem] items-start gap-3">
         {Icon && (
           <div className="grid size-10 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand-600">
             <Icon className="size-5" aria-hidden />

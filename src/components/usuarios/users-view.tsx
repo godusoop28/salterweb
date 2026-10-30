@@ -36,6 +36,36 @@ export function UsersView() {
   const count = (r: Role) => state.users.filter((u) => u.role === r).length;
   const sessionId = state.session?.userId;
 
+  const userActions = (u: User, className = "justify-end") => (
+    <div className={cn("flex gap-1", className)}>
+      <button onClick={() => setEditing(u)} className="grid size-9 place-items-center rounded-lg text-muted hover:bg-brand-50 hover:text-brand-600" aria-label={`Editar a ${u.name}`} title="Editar">
+        <Pencil className="size-4" />
+      </button>
+      <button
+        onClick={() => {
+          const next: UserStatus = u.status === "activo" ? "inactivo" : "activo";
+          saveUser({ name: u.name, email: u.email, phone: u.phone, role: u.role, status: next }, u.id);
+          toast.success(next === "activo" ? "Usuario activado" : "Usuario desactivado", u.name);
+        }}
+        disabled={u.id === sessionId}
+        className="grid size-9 place-items-center rounded-lg text-muted hover:bg-accent-50 hover:text-accent-700 disabled:opacity-30"
+        aria-label={u.status === "activo" ? `Desactivar a ${u.name}` : `Activar a ${u.name}`}
+        title={u.status === "activo" ? "Desactivar" : "Activar"}
+      >
+        <Power className="size-4" />
+      </button>
+      <button
+        onClick={() => setDeleting(u)}
+        disabled={u.id === sessionId}
+        className="grid size-9 place-items-center rounded-lg text-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
+        aria-label={`Eliminar a ${u.name}`}
+        title="Eliminar"
+      >
+        <Trash2 className="size-4" />
+      </button>
+    </div>
+  );
+
   const togglePermission = (r: Role, p: Permission) => {
     const current = state.settings.permissions[r];
     const next = current.includes(p) ? current.filter((x) => x !== p) : [...current, p];
@@ -75,7 +105,8 @@ export function UsersView() {
         {filtered.length === 0 ? (
           <EmptyState icon={Users} title="Sin usuarios" description="No hay usuarios con esos criterios." />
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[760px] text-left">
               <thead>
                 <tr className="border-b border-line-soft text-xs font-bold uppercase tracking-wider text-muted">
@@ -104,39 +135,33 @@ export function UsersView() {
                     <td className="px-4 py-3"><UserStatusBadge status={u.status} /></td>
                     <td className="px-4 py-3 text-sm text-muted">{u.lastAccess ? relativeTime(u.lastAccess) : "Nunca"}</td>
                     <td className="px-5 py-3">
-                      <div className="flex justify-end gap-1">
-                        <button onClick={() => setEditing(u)} className="grid size-9 place-items-center rounded-lg text-muted hover:bg-brand-50 hover:text-brand-600" aria-label={`Editar a ${u.name}`} title="Editar">
-                          <Pencil className="size-4" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            const next: UserStatus = u.status === "activo" ? "inactivo" : "activo";
-                            saveUser({ name: u.name, email: u.email, phone: u.phone, role: u.role, status: next }, u.id);
-                            toast.success(next === "activo" ? "Usuario activado" : "Usuario desactivado", u.name);
-                          }}
-                          disabled={u.id === sessionId}
-                          className="grid size-9 place-items-center rounded-lg text-muted hover:bg-accent-50 hover:text-accent-700 disabled:opacity-30"
-                          aria-label={u.status === "activo" ? `Desactivar a ${u.name}` : `Activar a ${u.name}`}
-                          title={u.status === "activo" ? "Desactivar" : "Activar"}
-                        >
-                          <Power className="size-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeleting(u)}
-                          disabled={u.id === sessionId}
-                          className="grid size-9 place-items-center rounded-lg text-muted hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
-                          aria-label={`Eliminar a ${u.name}`}
-                          title="Eliminar"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
-                      </div>
+                      {userActions(u)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <ul className="divide-y divide-line-soft md:hidden">
+            {filtered.map((u) => (
+              <li key={u.id} className="flex items-start gap-3 px-5 py-4">
+                <Avatar name={u.name} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-ink">
+                    {u.name} {u.id === sessionId && <span className="ml-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs font-bold text-brand-700">Tú</span>}
+                  </p>
+                  <p className="truncate text-[13px] text-muted">{u.email}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <RoleBadge role={u.role} />
+                    <UserStatusBadge status={u.status} />
+                  </div>
+                  <p className="mt-1.5 text-[13px] text-muted">Último acceso: {u.lastAccess ? relativeTime(u.lastAccess) : "Nunca"}</p>
+                  {userActions(u, "-ml-2 mt-1")}
+                </div>
+              </li>
+            ))}
+          </ul>
+          </>
         )}
       </Card>
 

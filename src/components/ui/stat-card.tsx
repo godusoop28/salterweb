@@ -11,8 +11,10 @@ const ICON_TONE: Record<StatTone, string> = {
   sky: "bg-sky-50 text-sky-600",
   green: "bg-emerald-50 text-emerald-600",
   red: "bg-red-50 text-red-600",
-  navy: "bg-white/10 text-white",
+  navy: "bg-slate-100 text-navy",
 };
+
+const FEATURED_ICON = "bg-white/10 text-white";
 
 export function StatCard({
   label,
@@ -40,7 +42,7 @@ export function StatCard({
   const content = (
     <>
       <div className="flex items-start justify-between gap-3">
-        <div className={cn("grid size-11 place-items-center rounded-2xl", featured ? ICON_TONE.navy : ICON_TONE[tone])}>
+        <div className={cn("grid size-11 place-items-center rounded-2xl", featured ? FEATURED_ICON : ICON_TONE[tone])}>
           <Icon className="size-[22px]" aria-hidden />
         </div>
         {delta && (

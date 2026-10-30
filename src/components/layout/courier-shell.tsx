@@ -55,11 +55,13 @@ export function CourierShell({ children }: { children: ReactNode }) {
 
       <div className="relative mx-auto flex h-dvh w-full flex-col bg-canvas lg:mx-0 lg:h-[min(880px,calc(100dvh-48px))] lg:w-[420px] lg:overflow-hidden lg:rounded-[44px] lg:border-[10px] lg:border-[#0b1730] lg:shadow-[0_40px_80px_-20px_rgb(0_0_0/0.6)]">
         <header className="z-20 flex shrink-0 items-center gap-3 border-b border-line bg-white px-4 py-3">
-          <Logo variant="compacto" height={28} priority />
-          <div className="ml-auto flex items-center gap-2">
-            <div className="text-right">
-              <p className="text-sm font-bold leading-tight text-ink">{courier.name}</p>
-              <p className="text-xs text-muted">{courier.zone} · {courier.plate}</p>
+          <Logo variant="compacto" height={28} priority className="shrink-0" />
+          <div className="ml-auto flex min-w-0 items-center gap-2">
+            <div className="min-w-0 text-right">
+              <p className="truncate text-sm font-bold leading-tight text-ink">{courier.name}</p>
+              <p className="truncate text-xs text-muted">
+                {courier.zone}<span className="hidden min-[400px]:inline"> · {courier.plate}</span>
+              </p>
             </div>
             <Avatar name={courier.name} size="sm" />
             <Link href="/login" className="grid size-9 place-items-center rounded-xl text-muted hover:bg-canvas" aria-label="Cambiar de perfil">
