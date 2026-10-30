@@ -1,0 +1,163 @@
+@import "tailwindcss";
+
+/* ──────────────────────────────────────────────────────────────
+   SALTER · Sistema de diseño
+   Colores extraídos de los logos oficiales:
+   naranja #FF7A00 · azul #0050C8 → #00A3F0 · navy #011638
+   ────────────────────────────────────────────────────────────── */
+
+:root {
+  --brand-primary: #0b5cd5;
+  --brand-primary-dark: #0a3f95;
+  --brand-secondary: #ff7a00;
+  --brand-secondary-strong: #e35d00;
+  --brand-sky: #00a3f0;
+  --brand-navy: #011638;
+  --brand-background: #f4f7fb;
+  --brand-surface: #ffffff;
+  --brand-text: #0f1b33;
+  --brand-text-muted: #55657f;
+  --brand-border: #e2e8f1;
+  --brand-gradient: linear-gradient(120deg, #0050c8 0%, #0b6fe0 55%, #00a3f0 100%);
+}
+
+@theme {
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jb-mono), ui-monospace, monospace;
+  --font-display: var(--font-exo), var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-50: #eef5ff;
+  --color-brand-100: #d9e8ff;
+  --color-brand-200: #b8d4fd;
+  --color-brand-300: #84b5f7;
+  --color-brand-400: #3f8ced;
+  --color-brand-500: #0b5cd5;
+  --color-brand-600: #094dba;
+  --color-brand-700: #0a3f95;
+  --color-brand-800: #0c3274;
+  --color-brand-900: #0b2552;
+  --color-navy: #011638;
+  --color-navy-800: #061f48;
+  --color-sky-brand: #00a3f0;
+
+  --color-accent-50: #fff5eb;
+  --color-accent-100: #ffe7cf;
+  --color-accent-200: #ffcb94;
+  --color-accent-300: #ffab5c;
+  --color-accent-400: #ff8f2e;
+  --color-accent-500: #ff7a00;
+  --color-accent-600: #e35d00;
+  --color-accent-700: #b84a00;
+
+  --color-ink: #0f1b33;
+  --color-ink-soft: #33415c;
+  --color-muted: #55657f;
+  --color-subtle: #8492a9;
+  --color-line: #e2e8f1;
+  --color-line-soft: #eef2f7;
+  --color-canvas: #f4f7fb;
+
+  --shadow-card: 0 1px 2px rgb(15 27 51 / 0.04), 0 6px 20px -8px rgb(15 27 51 / 0.1);
+  --shadow-pop: 0 12px 40px -12px rgb(1 22 56 / 0.28);
+  --shadow-glow: 0 10px 30px -10px rgb(255 122 0 / 0.55);
+
+  --animate-fade-in: fade-in 0.2s ease-out both;
+  --animate-slide-up: slide-up 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-slide-in-right: slide-in-right 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-scale-in: scale-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-shimmer: shimmer 1.4s linear infinite;
+  --animate-drive: drive 2.8s ease-in-out infinite;
+  --animate-pulse-ring: pulse-ring 2s ease-out infinite;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slide-in-right {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.96) translateY(8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  @keyframes shimmer {
+    from { background-position: -400px 0; }
+    to { background-position: 400px 0; }
+  }
+  @keyframes drive {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(6px); }
+  }
+  @keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 rgb(255 122 0 / 0.45); }
+    80%, 100% { box-shadow: 0 0 0 12px rgb(255 122 0 / 0); }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background: var(--brand-background);
+    color: var(--brand-text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: #ffe7cf;
+  }
+  :focus-visible {
+    outline: 3px solid rgb(11 92 213 / 0.45);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .bg-brand-gradient {
+    background: var(--brand-gradient);
+  }
+  .text-brand-gradient {
+    background: var(--brand-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .skeleton {
+    background: linear-gradient(90deg, #eef2f7 0px, #f8fafc 120px, #eef2f7 240px);
+    background-size: 800px 100%;
+    animation: var(--animate-shimmer);
+  }
+  .bg-grid {
+    background-image:
+      linear-gradient(rgb(255 255 255 / 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(255 255 255 / 0.06) 1px, transparent 1px);
+    background-size: 36px 36px;
+  }
+  .bg-dots {
+    background-image: radial-gradient(rgb(11 92 213 / 0.12) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
