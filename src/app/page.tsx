@@ -5,22 +5,22 @@ import { Logo } from "@/components/branding/logo";
 const ENTRIES = [
   {
     href: "/login",
-    title: "Administración",
-    text: "Panel general, paquetes, repartidores, incidencias y reportes.",
+    title: "Personal de SALTER",
+    text: "Guías, manifiestos, salidas, recepción, incidencias y reportes según tu rol.",
     icon: LayoutDashboard,
     tone: "bg-brand-500 text-white",
   },
   {
-    href: "/entregas",
-    title: "App del repartidor",
-    text: "Entregas del día, ruta, evidencia fotográfica y firma.",
+    href: "/login?next=/entregas",
+    title: "Repartidores",
+    text: "Tus envíos asignados, entrega e incidencias desde el celular.",
     icon: Smartphone,
     tone: "bg-accent-600 text-white",
   },
   {
-    href: "/portal",
-    title: "Portal del remitente",
-    text: "Registra envíos, consulta tu historial y su estado.",
+    href: "/login?next=/guias",
+    title: "Remitentes empresariales",
+    text: "Consulta el estado y los documentos de tus envíos.",
     icon: Store,
     tone: "bg-sky-brand text-white",
   },
@@ -33,7 +33,7 @@ const ENTRIES = [
   },
 ];
 
-const MODULES = ["Paquetes", "Repartidores", "Remitentes", "Rastreo por guía", "Evidencia y firma", "Incidencias", "Reportes", "Usuarios y roles"];
+const MODULES = ["Guías con folio", "Destinatarios", "Manifiestos", "Salidas", "Recepción", "Repartidores", "Incidencias", "Reportes", "Roles y permisos"];
 
 export default function WelcomePage() {
   return (
@@ -45,7 +45,7 @@ export default function WelcomePage() {
       <div className="relative mx-auto grid min-h-dvh max-w-6xl items-center gap-12 px-6 py-12 lg:grid-cols-[1fr_1.1fr]">
         <section className="flex flex-col items-center text-center lg:items-start lg:text-left">
           <Logo variant="vertical" height={220} priority className="drop-shadow-sm" />
-          <p className="mt-8 text-xs font-bold uppercase tracking-[0.18em] text-accent-600">Propuesta de producto · Prototipo interactivo</p>
+          <p className="mt-8 text-xs font-bold uppercase tracking-[0.18em] text-accent-600">Sistema de operación de paquetería</p>
           <h1 className="mt-3 font-display text-4xl font-bold leading-[1.1] tracking-tight text-ink sm:text-5xl">
             Tu paquetería, <span className="text-brand-gradient">organizada</span> de principio a fin.
           </h1>
@@ -62,7 +62,7 @@ export default function WelcomePage() {
         </section>
 
         <section aria-label="Elige una vista">
-          <p className="mb-4 text-sm font-semibold text-muted">Elige cómo quieres explorar el sistema:</p>
+          <p className="mb-4 text-sm font-semibold text-muted">Elige cómo quieres entrar:</p>
           <div className="grid gap-4 sm:grid-cols-2">
             {ENTRIES.map((e, i) => {
               const Icon = e.icon;
@@ -85,9 +85,7 @@ export default function WelcomePage() {
               );
             })}
           </div>
-          <p className="mt-6 rounded-2xl bg-accent-50 px-4 py-3 text-sm text-accent-700 ring-1 ring-accent-100">
-            <strong>Entorno de demostración.</strong> Los datos son ficticios y los cambios se guardan sólo en este navegador.
-          </p>
+          <p className="mt-6 text-sm text-muted">El acceso depende del rol que te asignó administración.</p>
         </section>
       </div>
     </div>

@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { TriangleAlert, X } from "lucide-react";
-import { useHydrated } from "@/hooks/use-demo";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
 

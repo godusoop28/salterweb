@@ -1,5 +1,5 @@
-import { CourierDeliveries } from "@/components/repartidores/courier-app";
+import { CourierAssignments } from "@/components/repartidores/courier-app";
 
 export default function EntregasPage() {
-  return <CourierDeliveries />;
+  return <CourierAssignments />;
 }

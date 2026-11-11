@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Exo_2, JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import { ToastProvider } from "@/components/ui/toast";
+import { Providers } from "@/lib/session";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -26,7 +27,7 @@ export const metadata: Metadata = {
     default: "SALTER · Alternativa en Movimiento",
     template: "%s · SALTER",
   },
-  description: "Prototipo interactivo del sistema integral de gestión de paquetería de SALTER.",
+  description: "Sistema de operación de paquetería de SALTER: guías, manifiestos, salidas, recepción y reportes.",
 };
 
 export const viewport: Viewport = {
@@ -37,7 +38,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="es-MX" className={`${jakarta.variable} ${exo.variable} ${mono.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <ToastProvider>{children}</ToastProvider>
+        <Providers>
+          <ToastProvider>{children}</ToastProvider>
+        </Providers>
       </body>
     </html>
   );

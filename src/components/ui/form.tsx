@@ -1,4 +1,4 @@
-import { forwardRef, useId, type ComponentProps, type ReactNode } from "react";
+import { cloneElement, forwardRef, isValidElement, useId, type ComponentProps, type ReactElement, type ReactNode } from "react";
 import { ChevronDown, CircleAlert, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +11,8 @@ interface FieldProps {
   error?: string;
   required?: boolean;
   className?: string;
-  children: (id: string, describedBy?: string) => ReactNode;
+  /** Función render (id, describedBy) o un único control al que se le asignan id y aria-describedby. */
+  children: ((id: string, describedBy?: string) => ReactNode) | ReactNode;
 }
 
 /** Envuelve un control con etiqueta, ayuda y mensaje de error accesibles. */
@@ -24,7 +25,15 @@ export function Field({ label, hint, error, required, className, children }: Fie
         {label}
         {required && <span className="ml-0.5 text-accent-600" aria-hidden>*</span>}
       </label>
-      {children(id, descId)}
+      {typeof children === "function"
+        ? children(id, descId)
+        : isValidElement(children)
+          ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+              id: (children.props as { id?: string }).id ?? id,
+              "aria-describedby": descId,
+              "aria-invalid": error ? true : undefined,
+            })
+          : children}
       {error ? (
         <p id={descId} className="flex items-center gap-1.5 text-[13px] font-medium text-red-600" role="alert">
           <CircleAlert className="size-3.5 shrink-0" aria-hidden />
