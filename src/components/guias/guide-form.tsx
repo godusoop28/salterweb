@@ -7,15 +7,15 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   CircleCheck, FilePlus2, FileText, Keyboard, Plus, Save, Search, Trash2, UserPlus, UserRound, X,
 } from "lucide-react";
-import { InlineError, ProvisionalNote } from "@/components/app/common";
+import { InlineError } from "@/components/app/common";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Card } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/toast";
 import { ApiError, api, downloadFile, errorMessage } from "@/lib/api/client";
-import { useConcepts, useInvalidateOperation, useRecipients, useSenders, useShifts } from "@/lib/api/hooks";
+import { useConcepts, useGuideServices, useInvalidateOperation, useRecipients, useSenders, useShifts } from "@/lib/api/hooks";
 import type { Address, DuplicateMatch, Guide, GuideRequest, Recipient } from "@/lib/api/types";
-import { joinAddress, uuid } from "@/lib/format";
+import { joinAddress, printedFolio, todayKey, uuid } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { useDebounced } from "@/hooks/use-debounced";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,15 @@ const EMPTY_RCPT: NewRcpt = { firstName: "", lastName: "", phone: "", email: "",
 const SENDER_KEY = "salter.guia.remitente";
 
 const AUTO = "auto";
+
+const plaza = (v: string) => v.replace(/[^a-zA-Z]/g, "").slice(0, 5).toUpperCase();
+
+/** Fecha (YYYY-MM-DD) sumando días a hoy en la zona horaria del negocio. */
+function addDaysKey(days: number): string {
+  const [y, m, d] = todayKey().split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return dt.toISOString().slice(0, 10);
+}
 
 function rcptFromDraft(draft: Guide): NewRcpt {
   const a = draft.recipient.address;
@@ -50,6 +59,7 @@ export function GuideForm({ draft }: { draft?: Guide }) {
   const senders = useSenders({ active: true });
   const shifts = useShifts();
   const concepts = useConcepts();
+  const services = useGuideServices();
 
   const [chosenSender, setSenderId] = useState<number | undefined>(draft?.senderId);
   const [chosenShift, setShiftId] = useState<string | null>(draft ? (draft.shift ? String(draft.shift.id) : "") : null);
@@ -70,6 +80,12 @@ export function GuideForm({ draft }: { draft?: Guide }) {
   const [order, setOrder] = useState(draft?.orderReference ?? "");
   const [packages, setPackages] = useState(String(draft?.packageCount ?? 1));
   const [notes, setNotes] = useState(draft?.notes ?? "");
+  // Formato oficial de guía: PBA → OAX, dimensiones, servicio y fecha compromiso
+  const [origin, setOrigin] = useState<string | null>(draft?.shipping?.originCode ?? null);
+  const [destination, setDestination] = useState(draft?.shipping?.destinationCode ?? "");
+  const [dimensions, setDimensions] = useState(draft?.shipping?.dimensions ?? "");
+  const [service, setService] = useState(draft?.shipping?.serviceType ?? "");
+  const [commitment, setCommitment] = useState(draft?.shipping?.commitmentDate ?? "");
   const [items, setItems] = useState<ItemRow[]>(() =>
     draft?.items.length
       ? draft.items.map((i) => ({ key: uuid(), conceptId: i.conceptId ? String(i.conceptId) : "", description: i.description, quantity: String(i.quantity), unit: i.unit, weightKg: i.weightKg != null ? String(i.weightKg) : "" }))
@@ -87,6 +103,12 @@ export function GuideForm({ draft }: { draft?: Guide }) {
     return (list.find((x) => x.id === saved) ?? list[0]).id;
   }, [senders.data]);
   const senderId = chosenSender ?? me?.sender?.id ?? (restricted ? undefined : defaultSender);
+  const currentSender = senders.data?.content.find((s) => s.id === senderId);
+  // Plaza de origen: la capturada o la del remitente
+  const originCode = origin ?? currentSender?.plazaCode ?? "";
+  const serviceCode = service || services.data?.[0]?.code || "ORDINARIO";
+  const serviceDays = services.data?.find((s) => s.code === serviceCode)?.days ?? 1;
+  const totalWeight = items.reduce((sum, i) => sum + (Number(i.weightKg) || 0), 0);
   // Turno actual por defecto.
   const shiftId = chosenShift ?? String(shifts.data?.find((x) => x.current)?.id ?? "");
   // Concepto por defecto: el primero activo del catálogo.
@@ -123,6 +145,10 @@ export function GuideForm({ draft }: { draft?: Guide }) {
       recipientId: mode === "search" ? recipient?.id : undefined,
       newRecipient: mode === "new" ? { firstName: rcpt.firstName, lastName: rcpt.lastName, phone: rcpt.phone, email: rcpt.email, address, saveToCatalog, allowProbableDuplicate: allowProbable } : undefined,
       cdReference: cd, orderReference: order, packageCount: Number(packages) || 1, notes,
+      shipping: {
+        originCode: originCode || undefined, destinationCode: destination || undefined, dimensions: dimensions || undefined,
+        serviceType: serviceCode, commitmentDate: commitment || undefined,
+      },
       items: items.map((i) => ({
         conceptId: conceptOf(i) ? Number(conceptOf(i)) : undefined, description: i.description || undefined,
         quantity: Number(i.quantity), unit: i.unit || undefined, weightKg: i.weightKg ? Number(i.weightKg) : undefined,
@@ -144,6 +170,9 @@ export function GuideForm({ draft }: { draft?: Guide }) {
       if (confirm && !rcpt.city.trim()) e.city = "Necesaria para confirmar.";
     }
     if (!(Number(packages) >= 1)) e.packages = "Mínimo 1.";
+    if (originCode && originCode.length < 2) e.origin = "2 a 5 letras.";
+    if (destination && destination.length < 2) e.destination = "2 a 5 letras.";
+    if (confirm && !destination) e.destination = "Necesaria para confirmar.";
     items.forEach((i, idx) => {
       if (!(Number(i.quantity) > 0)) e[`item${idx}`] = "Cantidad mayor a cero.";
       if (!conceptOf(i) && !i.description.trim()) e[`item${idx}`] = "Elige un concepto o descríbelo.";
@@ -171,6 +200,8 @@ export function GuideForm({ draft }: { draft?: Guide }) {
     setOrder("");
     setPackages("1");
     setNotes("");
+    setDimensions("");
+    setCommitment("");
     setItems([newItem()]);
     setErrors({});
     setServerError(null);
@@ -194,7 +225,10 @@ export function GuideForm({ draft }: { draft?: Guide }) {
       <Card className="mx-auto max-w-xl p-8 text-center">
         <div className="mx-auto grid size-16 place-items-center rounded-full bg-emerald-50 text-emerald-600"><CircleCheck className="size-8" /></div>
         <h2 className="mt-4 font-display text-2xl font-bold text-ink">{done.folio ? "Guía confirmada" : "Borrador guardado"}</h2>
-        <p className="mt-2 font-mono text-3xl font-bold text-brand-700">{done.folio ?? done.reference}</p>
+        <p className="mt-2 font-mono text-3xl font-bold text-brand-700">{done.folio ? printedFolio(done.folio) : done.reference}</p>
+        {done.shipping?.destinationCode && (
+          <p className="mt-1 text-lg font-semibold text-ink">{done.shipping.originCode ?? "—"} → {done.shipping.destinationCode}</p>
+        )}
         <p className="mt-2 text-muted">{done.recipient.name} · {done.recipient.address.city ?? ""}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button onClick={reset} icon={<FilePlus2 className="size-4" />} autoFocus>Nueva guía</Button>
@@ -210,7 +244,7 @@ export function GuideForm({ draft }: { draft?: Guide }) {
     );
   }
 
-  const senderName = me?.sender?.name ?? senders.data?.content.find((s) => s.id === senderId)?.name;
+  const senderName = me?.sender?.name ?? currentSender?.name;
 
   return (
     <form className="grid gap-5 xl:grid-cols-[1fr_340px]" onSubmit={(e) => { e.preventDefault(); submit(can("GUIDES_CONFIRM")); }} noValidate>
@@ -236,8 +270,40 @@ export function GuideForm({ draft }: { draft?: Guide }) {
         </Card>
 
         <Card className="p-5 sm:p-6">
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-base font-bold text-ink">Ruta y servicio</h3>
+            {currentSender && <span className="text-[13px] text-muted">Folio: <span className="font-mono font-semibold text-ink">{currentSender.effectiveGuidePrefix} 000000000</span></span>}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+            <Field label="Plaza de origen" error={errors.origin} hint={currentSender?.plazaCode ? `Del remitente: ${currentSender.plazaCode}` : "Ej. PBA"}>
+              <Input value={originCode} maxLength={5} placeholder="PBA" className="font-mono text-lg uppercase"
+                onChange={(e) => setOrigin(plaza(e.target.value))} />
+            </Field>
+            <span className="hidden pb-3 text-2xl text-brand-400 sm:block" aria-hidden>→</span>
+            <Field label="Plaza de destino" error={errors.destination} required hint="Ej. OAX">
+              <Input value={destination} maxLength={5} placeholder="OAX" className="font-mono text-lg uppercase"
+                onChange={(e) => setDestination(plaza(e.target.value))} />
+            </Field>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <Field label="Servicio">
+              <Select value={serviceCode} onChange={(e) => { setService(e.target.value); setCommitment(""); }}>
+                {(services.data ?? [{ code: "ORDINARIO", days: 1 }]).map((s) => <option key={s.code} value={s.code}>{s.code}</option>)}
+              </Select>
+            </Field>
+            <Field label="Fecha compromiso" hint={commitment ? "Capturada manualmente" : `Automática: ${serviceDays === 0 ? "mismo día" : `+${serviceDays} día(s)`} al confirmar`}>
+              <Input type="date" value={commitment || addDaysKey(serviceDays)} min={todayKey()}
+                onChange={(e) => setCommitment(e.target.value)} />
+            </Field>
+            <Field label="Dimensiones (cm)" hint="Largo x ancho x alto">
+              <Input value={dimensions} placeholder="30 x 20 x 15" onChange={(e) => setDimensions(e.target.value)} />
+            </Field>
+          </div>
+        </Card>
+
+        <Card className="p-5 sm:p-6">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-base font-bold text-ink">Destinatario</h3>
+            <h3 className="text-base font-bold text-ink">Consignatario</h3>
             <div className="inline-flex rounded-xl bg-canvas p-1 text-sm font-semibold">
               <button type="button" onClick={() => setMode("search")} className={cn("rounded-lg px-3 py-1.5", mode === "search" ? "bg-white text-brand-700 shadow-card" : "text-muted")}>
                 <Search className="mr-1 inline size-4" />Buscar
@@ -311,7 +377,10 @@ export function GuideForm({ draft }: { draft?: Guide }) {
         </Card>
 
         <Card className="p-5 sm:p-6">
-          <h3 className="mb-4 text-base font-bold text-ink">Mercancía</h3>
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-base font-bold text-ink">Mercancía</h3>
+            {totalWeight > 0 && <span className="text-sm text-muted">Peso total: <span className="font-semibold text-ink">{totalWeight} kg</span></span>}
+          </div>
           <div className="space-y-3">
             {items.map((it, idx) => (
               <div key={it.key} className="grid gap-2 rounded-2xl border border-line-soft p-3 sm:grid-cols-[1.4fr_1.4fr_0.7fr_0.8fr_0.8fr_auto] sm:items-end sm:border-0 sm:p-0">
@@ -343,9 +412,9 @@ export function GuideForm({ draft }: { draft?: Guide }) {
 
       <div className="space-y-5 xl:sticky xl:top-24 xl:self-start">
         <Card className="space-y-4 p-5">
-          <Field label="Referencia CD" hint="Documento de origen (formato por confirmar)"><Input value={cd} onChange={(e) => setCd(e.target.value)} /></Field>
+          <Field label="Clave CD" hint="Se imprime junto a las piezas (ej. CVA-01)"><Input value={cd} placeholder="CVA-01" className="uppercase" onChange={(e) => setCd(e.target.value.toUpperCase())} /></Field>
           <Field label="Pedido / referencia"><Input value={order} onChange={(e) => setOrder(e.target.value)} /></Field>
-          <Field label="Bultos" error={errors.packages}><Input inputMode="numeric" value={packages} onChange={(e) => setPackages(e.target.value.replace(/\D/g, ""))} /></Field>
+          <Field label="Piezas" error={errors.packages}><Input inputMode="numeric" value={packages} onChange={(e) => setPackages(e.target.value.replace(/\D/g, ""))} /></Field>
           <Field label="Observaciones"><Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
         </Card>
         <Card className="space-y-3 p-5">
@@ -363,7 +432,6 @@ export function GuideForm({ draft }: { draft?: Guide }) {
           <p className="flex items-center gap-1.5 text-[12px] text-subtle"><Keyboard className="size-3.5" /> Ctrl + Enter para {can("GUIDES_CONFIRM") ? "confirmar" : "guardar"}</p>
           {draft && <Link href={`/guias/${draft.id}`} className="block text-center text-sm font-semibold text-brand-600">Cancelar edición</Link>}
         </Card>
-        <ProvisionalNote>el formato del documento y los campos obligatorios se ajustarán con los ejemplos reales de SALTER.</ProvisionalNote>
       </div>
     </form>
   );

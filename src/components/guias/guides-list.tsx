@@ -33,7 +33,7 @@ export function GuidesList() {
   const shifts = useShifts();
   const dq = useDebounced(q.trim());
   const query = useGuides({
-    q: dq || undefined, status: status ? [status] : undefined, senderId: senderId ? Number(senderId) : undefined,
+    q: dq.split("|")[0].trim() || undefined, status: status ? [status] : undefined, senderId: senderId ? Number(senderId) : undefined,
     shiftId: shiftId ? Number(shiftId) : undefined, from: from || undefined, to: to || undefined, page: page - 1, size: PAGE_SIZE,
   });
   const title = all ? "Guías" : can("SHIPMENTS_OWN") ? "Mis envíos" : "Mis guías";
@@ -70,11 +70,12 @@ export function GuidesList() {
           ) : (
             <>
               {/* Escritorio */}
-              <Table className="hidden md:block" head={["Folio", "Estado", "Destinatario", "Remitente", "Ref. CD / pedido", "Bultos", "Elaborada"]}>
+              <Table className="hidden md:block" head={["Folio", "Estado", "Ruta", "Consignatario", "Remitente", "Clave CD / pedido", "Piezas", "Elaborada"]}>
                 {data?.content.map((g) => (
                   <tr key={g.id} className="cursor-pointer hover:bg-canvas" onClick={() => router.push(`/guias/${g.id}`)}>
                     <td className="px-4 py-3"><Link href={`/guias/${g.id}`} className="font-mono font-semibold text-brand-700" onClick={(e) => e.stopPropagation()}>{g.reference}</Link></td>
                     <td className="px-4 py-3"><GuideStatusBadge status={g.status} size="sm" /></td>
+                    <td className="whitespace-nowrap px-4 py-3 font-mono text-[13px] font-semibold text-ink">{g.destinationCode ? `${g.originCode ?? "—"} → ${g.destinationCode}` : "—"}</td>
                     <td className="px-4 py-3"><p className="font-semibold text-ink">{g.recipientName}</p><p className="text-[13px] text-muted">{g.recipientCity ?? "—"}</p></td>
                     <td className="px-4 py-3 text-ink-soft">{g.senderName}</td>
                     <td className="px-4 py-3 text-ink-soft">{[g.cdReference, g.orderReference].filter(Boolean).join(" / ") || "—"}</td>
@@ -90,7 +91,7 @@ export function GuidesList() {
                     <Link href={`/guias/${g.id}`} className="block px-4 py-3.5 active:bg-canvas">
                       <div className="flex items-center justify-between gap-2"><span className="font-mono font-semibold text-brand-700">{g.reference}</span><GuideStatusBadge status={g.status} size="sm" /></div>
                       <p className="mt-1 font-semibold text-ink">{g.recipientName}</p>
-                      <p className="text-[13px] text-muted">{g.recipientCity ?? "—"} · {g.packageCount} bulto(s) · {fmtDateTime(g.createdAt)}</p>
+                      <p className="text-[13px] text-muted">{g.destinationCode ? `${g.originCode ?? "—"} → ${g.destinationCode} · ` : ""}{g.recipientCity ?? "—"} · {g.packageCount} pieza(s) · {fmtDateTime(g.createdAt)}</p>
                     </Link>
                   </li>
                 ))}

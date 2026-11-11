@@ -32,7 +32,14 @@ export interface LoginResponse { token: string; expiresAt: string; user: Me }
 // ─────────── Catálogos ───────────
 export interface Sender {
   id: number; code: string; name: string; kind: "EMPRESA" | "PARTICULAR"; contactName?: string; phone?: string;
-  email?: string; address: Address; notes?: string; active: boolean; createdAt: string; version: number;
+  email?: string; address: Address; notes?: string;
+  /** Plaza de origen por defecto en la guía (ej. PBA). */
+  plazaCode?: string;
+  /** Siglas configuradas para el folio (ej. ATM). */
+  guidePrefix?: string;
+  /** Siglas que realmente se usan en el folio (configuradas o calculadas del nombre). */
+  effectiveGuidePrefix: string;
+  active: boolean; createdAt: string; version: number;
 }
 export interface Shift { id: number; code: string; name: string; startTime: string; endTime: string; active: boolean; current: boolean }
 export interface Concept { id: number; name: string; unit: string; active: boolean }
@@ -69,7 +76,8 @@ export type GuideAction =
 export interface GuideSummary {
   id: number; folio?: string; reference: string; status: GuideStatus; statusLabel: string; senderId: number;
   senderName: string; recipientId?: number; recipientName: string; recipientPhone?: string; recipientCity?: string;
-  cdReference?: string; orderReference?: string; packageCount: number; shift?: Ref; createdBy: Ref;
+  cdReference?: string; orderReference?: string; packageCount: number; originCode?: string; destinationCode?: string;
+  shift?: Ref; createdBy: Ref;
   createdAt: string; confirmedAt?: string; version: number;
 }
 
@@ -83,7 +91,8 @@ export interface Movement {
 export interface Guide {
   id: number; folio?: string; reference: string; status: GuideStatus; statusLabel: string; senderId: number;
   sender: Party; recipientId?: number; recipientOneTime: boolean; recipient: Party; shift?: Ref;
-  cdReference?: string; orderReference?: string; packageCount: number; totalWeightKg?: number; notes?: string;
+  cdReference?: string; orderReference?: string; packageCount: number; totalWeightKg?: number;
+  shipping: Shipping; notes?: string;
   items: GuideItem[]; createdBy: Ref; createdAt: string; updatedAt: string; confirmedAt?: string; confirmedBy?: Ref;
   cancelledAt?: string; cancelledBy?: Ref; cancelReason?: string;
   manifest?: { id: number; number: string; status: ManifestStatus };
@@ -93,6 +102,15 @@ export interface Guide {
   openIncidentId?: number; movements: Movement[]; allowedActions: GuideAction[]; version: number;
 }
 
+/** Datos de traslado del formato oficial de guía: PBA → OAX, dimensiones, servicio y fecha compromiso. */
+export interface Shipping {
+  originCode?: string; destinationCode?: string; dimensions?: string; serviceType: string; commitmentDate?: string;
+}
+export interface ShippingInput {
+  originCode?: string; destinationCode?: string; dimensions?: string; serviceType?: string; commitmentDate?: string;
+}
+export interface ServiceOption { code: string; days: number }
+
 export interface NewRecipientInput {
   firstName: string; lastName?: string; phone?: string; email?: string; address?: Address;
   saveToCatalog: boolean; allowProbableDuplicate?: boolean;
@@ -100,8 +118,8 @@ export interface NewRecipientInput {
 export interface ItemInput { conceptId?: number; description?: string; quantity: number; unit?: string; weightKg?: number }
 export interface GuideRequest {
   clientRequestId?: string; senderId?: number; shiftId?: number; recipientId?: number; newRecipient?: NewRecipientInput;
-  cdReference?: string; orderReference?: string; packageCount?: number; items: ItemInput[]; notes?: string;
-  confirm: boolean; version?: number;
+  cdReference?: string; orderReference?: string; packageCount?: number; shipping?: ShippingInput; items: ItemInput[];
+  notes?: string; confirm: boolean; version?: number;
 }
 
 // ─────────── Manifiestos ───────────

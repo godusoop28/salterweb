@@ -29,11 +29,12 @@ export function SendersView() {
       <Card>
         <QueryState loading={list.isLoading} error={list.error} onRetry={() => list.refetch()}>
           {list.data?.content.length === 0 ? <EmptyState icon={Store} title="Sin remitentes" /> : (
-            <Table head={["Clave", "Nombre", "Contacto", "Dirección", "Estado", ""]}>
+            <Table head={["Clave", "Nombre", "Folio / plaza", "Contacto", "Dirección", "Estado", ""]}>
               {list.data?.content.map((s) => (
                 <tr key={s.id}>
                   <td className="px-4 py-3 font-mono text-[13px]">{s.code}</td>
                   <td className="px-4 py-3"><p className="font-semibold text-ink">{s.name}</p><p className="text-[13px] text-muted">{s.kind === "EMPRESA" ? "Empresa" : "Particular"}</p></td>
+                  <td className="px-4 py-3 font-mono text-[13px] text-ink-soft">{s.effectiveGuidePrefix}{s.plazaCode ? ` · ${s.plazaCode}` : ""}</td>
                   <td className="px-4 py-3 text-ink-soft">{[s.contactName, s.phone].filter(Boolean).join(" · ") || "—"}</td>
                   <td className="px-4 py-3 text-ink-soft">{joinAddress(s.address) || "—"}</td>
                   <td className="px-4 py-3">{s.active ? <Badge tone="green" size="sm">Activo</Badge> : <Badge tone="slate" size="sm">Inactivo</Badge>}</td>
@@ -54,12 +55,14 @@ function SenderDrawer({ sender, onClose }: { sender: Sender | null; onClose: () 
   const toast = useToast();
   const a = sender?.address ?? {};
   const [f, setF] = useState({ code: sender?.code ?? "", name: sender?.name ?? "", kind: sender?.kind ?? "EMPRESA", contactName: sender?.contactName ?? "", phone: sender?.phone ?? "", email: sender?.email ?? "",
-    street: a.street ?? "", neighborhood: a.neighborhood ?? "", city: a.city ?? "", state: a.state ?? "", zip: a.zip ?? "", notes: sender?.notes ?? "", active: sender?.active ?? true });
+    street: a.street ?? "", neighborhood: a.neighborhood ?? "", city: a.city ?? "", state: a.state ?? "", zip: a.zip ?? "", notes: sender?.notes ?? "", active: sender?.active ?? true,
+    plazaCode: sender?.plazaCode ?? "", guidePrefix: sender?.guidePrefix ?? "" });
   const [error, setError] = useState<string | null>(null);
   const save = useMutation({
     mutationFn: () => {
       const body = { code: f.code || undefined, name: f.name, kind: f.kind, contactName: f.contactName, phone: f.phone, email: f.email || undefined, notes: f.notes,
-        address: { street: f.street, neighborhood: f.neighborhood, city: f.city, state: f.state, zip: f.zip }, active: f.active, version: sender?.version };
+        address: { street: f.street, neighborhood: f.neighborhood, city: f.city, state: f.state, zip: f.zip }, active: f.active, version: sender?.version,
+        plazaCode: f.plazaCode, guidePrefix: f.guidePrefix };
       return sender ? api.put(`/senders/${sender.id}`, body) : api.post("/senders", body);
     },
     onSuccess: async () => { await qc.invalidateQueries({ queryKey: qk.senders }); toast.success("Remitente guardado"); onClose(); },
@@ -73,6 +76,14 @@ function SenderDrawer({ sender, onClose }: { sender: Sender | null; onClose: () 
         <Field label="Nombre / razón social" required className="sm:col-span-2"><Input value={f.name} onChange={set("name")} /></Field>
         <Field label="Clave" hint="Se genera si la dejas vacía"><Input value={f.code} onChange={set("code")} /></Field>
         <Field label="Tipo"><Select value={f.kind} onChange={set("kind")}><option value="EMPRESA">Empresa</option><option value="PARTICULAR">Particular</option></Select></Field>
+        <Field label="Siglas del folio de guía" hint={`Folio: ${(f.guidePrefix || sender?.effectiveGuidePrefix || "Automáticas")} 000000001`}>
+          <Input value={f.guidePrefix} maxLength={6} placeholder={sender?.effectiveGuidePrefix ?? "Ej. ATM"} className="font-mono uppercase"
+            onChange={(e) => setF({ ...f, guidePrefix: e.target.value.replace(/[^a-zA-Z]/g, "").toUpperCase() })} />
+        </Field>
+        <Field label="Plaza de origen" hint="Se usa por defecto en la guía (ej. PBA)">
+          <Input value={f.plazaCode} maxLength={5} placeholder="PBA" className="font-mono uppercase"
+            onChange={(e) => setF({ ...f, plazaCode: e.target.value.replace(/[^a-zA-Z]/g, "").toUpperCase() })} />
+        </Field>
         <Field label="Contacto"><Input value={f.contactName} onChange={set("contactName")} /></Field>
         <Field label="Teléfono"><Input value={f.phone} onChange={set("phone")} /></Field>
         <Field label="Correo" className="sm:col-span-2"><Input value={f.email} onChange={set("email")} /></Field>

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/form";
 import { Card, InfoRow, PageHeader } from "@/components/ui/primitives";
 import { api, errorMessage } from "@/lib/api/client";
 import type { Guide } from "@/lib/api/types";
-import { fmtDateTime, joinAddress } from "@/lib/format";
+import { fmtDateTime, joinAddress, normalizeFolio } from "@/lib/format";
 
 /**
  * Recepción en destino por folio. El campo acepta lo que "escriba" un lector de código de barras/QR
@@ -27,7 +27,7 @@ export function ReceptionView() {
 
   async function lookup(e?: React.FormEvent) {
     e?.preventDefault();
-    const f = folio.trim().toUpperCase();
+    const f = normalizeFolio(folio);
     if (!f) return;
     setLoading(true);
     setError(null);
@@ -48,7 +48,7 @@ export function ReceptionView() {
       <PageHeader title="Recepción en destino" description="Busca la guía por folio y confirma la llegada de la mercancía. Una guía sólo puede recibirse una vez." />
       <Card className="mb-5 p-5">
         <form onSubmit={lookup} className="flex flex-col gap-3 sm:flex-row">
-          <Input ref={inputRef} autoFocus value={folio} onChange={(e) => setFolio(e.target.value)} placeholder="Folio (ej. SAL-000123) o escanea el código" icon={<ScanLine className="size-4" />} aria-label="Folio" className="font-mono" />
+          <Input ref={inputRef} autoFocus value={folio} onChange={(e) => setFolio(e.target.value)} placeholder="Folio (ej. ATM 000000001) o escanea el código de la guía" icon={<ScanLine className="size-4" />} aria-label="Folio" className="font-mono" />
           <Button type="submit" loading={loading} icon={<PackageSearch className="size-4" />}>Buscar</Button>
         </form>
         <div className="mt-3"><InlineError message={error} /></div>

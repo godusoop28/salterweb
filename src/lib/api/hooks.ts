@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { api } from "./client";
 import type {
   Concept, Courier, CourierAssignment, CourierHistoryItem, Guide, GuideStatus, GuideSummary, Incident, Manifest,
-  ManifestSummary, Page, PermissionInfo, Recipient, ReportSummary, RoleInfo, Sender, Shift, UserAccount,
+  ManifestSummary, Page, PermissionInfo, Recipient, ReportSummary, RoleInfo, Sender, ServiceOption, Shift, UserAccount,
 } from "./types";
 
 /** Claves de caché: invalidar un prefijo refresca todas las vistas relacionadas. */
@@ -57,6 +57,10 @@ export function useShifts() {
 
 export function useConcepts() {
   return useQuery({ queryKey: [...qk.catalogs, "concepts"], queryFn: () => api.get<Concept[]>("/concepts"), staleTime: 5 * 60_000 });
+}
+
+export function useGuideServices() {
+  return useQuery({ queryKey: [...qk.catalogs, "guide-services"], queryFn: () => api.get<ServiceOption[]>("/guides/services"), staleTime: 5 * 60_000 });
 }
 
 export function useSettings() {

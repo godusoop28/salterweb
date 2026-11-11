@@ -39,7 +39,7 @@ export function TrackingView() {
           <h1 className="font-display text-3xl font-bold sm:text-4xl">Rastrea tu envío</h1>
           <p className="mt-2 text-white/70">Escribe el folio de tu guía.</p>
           <form className="mt-6 flex gap-2" onSubmit={(e) => { e.preventDefault(); if (value.trim()) router.replace(`/rastreo?guia=${encodeURIComponent(value.trim())}`); }}>
-            <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Ej. SAL-000123" aria-label="Folio"
+            <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Ej. ATM 000000001" aria-label="Folio"
               className="h-13 flex-1 rounded-2xl border-0 bg-white px-5 font-mono text-lg text-ink outline-none focus:ring-4 focus:ring-accent-400/50" />
             <Button type="submit" size="lg" icon={<Search className="size-5" />}>Buscar</Button>
           </form>

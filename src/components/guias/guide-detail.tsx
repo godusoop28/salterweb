@@ -14,7 +14,7 @@ import { useToast } from "@/components/ui/toast";
 import { api, downloadFile, errorMessage } from "@/lib/api/client";
 import { useGuide, useInvalidateOperation } from "@/lib/api/hooks";
 import type { Guide } from "@/lib/api/types";
-import { fmtDateTime, joinAddress } from "@/lib/format";
+import { fmtDate, fmtDateTime, joinAddress, printedFolio } from "@/lib/format";
 import { GuideActionDialog, type ActionKind } from "./guide-actions";
 import { GuideForm } from "./guide-form";
 
@@ -57,7 +57,7 @@ function Detail({ g, onAction, onEdit, onConfirm, confirming, onPdf }: {
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-accent-600">{g.folio ? "Folio" : "Borrador (sin folio)"}</p>
-          <h1 className="font-mono text-3xl font-bold text-ink">{g.reference}</h1>
+          <h1 className="font-mono text-3xl font-bold text-ink">{g.folio ? printedFolio(g.folio) : g.reference}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2"><GuideStatusBadge status={g.status} size="lg" />{g.recipientOneTime && <span className="text-[13px] text-muted">Destinatario de un solo uso</span>}</div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -86,7 +86,7 @@ function Detail({ g, onAction, onEdit, onConfirm, confirming, onPdf }: {
               <p className="mt-1 text-sm text-ink-soft">{joinAddress(g.sender.address)}</p>
             </Card>
             <Card className="p-5">
-              <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-subtle">Destinatario</h3>
+              <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-subtle">Consignatario</h3>
               <p className="font-bold text-ink">{g.recipient.name}</p>
               <p className="text-sm text-muted">{g.recipient.phone ?? "Sin teléfono"}</p>
               <p className="mt-1 text-sm text-ink-soft">{joinAddress(g.recipient.address) || "Sin dirección"}</p>
@@ -105,9 +105,14 @@ function Detail({ g, onAction, onEdit, onConfirm, confirming, onPdf }: {
             </div>
           </Card>
           <Card className="grid gap-4 p-5 sm:grid-cols-3">
-            <InfoRow label="Referencia CD">{g.cdReference ?? "—"}</InfoRow>
+            <InfoRow label="Ruta">{g.shipping?.originCode || g.shipping?.destinationCode ? `${g.shipping.originCode ?? "—"} → ${g.shipping.destinationCode ?? "—"}` : "—"}</InfoRow>
+            <InfoRow label="Servicio">{g.shipping?.serviceType ? `Servicio ${g.shipping.serviceType.toLowerCase()}` : "—"}</InfoRow>
+            <InfoRow label="Fecha compromiso">{g.shipping?.commitmentDate ? fmtDate(g.shipping.commitmentDate) : g.status === "BORRADOR" ? "Se calcula al confirmar" : "—"}</InfoRow>
+            <InfoRow label="Piezas">{g.packageCount}</InfoRow>
+            <InfoRow label="Peso">{g.totalWeightKg != null ? `${g.totalWeightKg} kg` : "—"}</InfoRow>
+            <InfoRow label="Dimensiones">{g.shipping?.dimensions ?? "—"}</InfoRow>
+            <InfoRow label="Clave CD">{g.cdReference ?? "—"}</InfoRow>
             <InfoRow label="Pedido">{g.orderReference ?? "—"}</InfoRow>
-            <InfoRow label="Bultos">{g.packageCount}</InfoRow>
             <InfoRow label="Turno">{g.shift?.name ?? "—"}</InfoRow>
             <InfoRow label="Elaboró">{g.createdBy.name} · {fmtDateTime(g.createdAt)}</InfoRow>
             <InfoRow label="Confirmó">{g.confirmedBy ? `${g.confirmedBy.name} · ${fmtDateTime(g.confirmedAt)}` : "—"}</InfoRow>

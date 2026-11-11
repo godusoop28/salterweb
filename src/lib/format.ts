@@ -20,6 +20,23 @@ export function joinAddress(a?: { street?: string; neighborhood?: string; city?:
   return [a.street, a.neighborhood, [a.city, a.state].filter(Boolean).join(", "), a.zip ? `C.P. ${a.zip}` : ""].filter(Boolean).join(" · ");
 }
 
+/**
+ * Normaliza un folio tecleado o leído con escáner. El código PDF417 de la guía trae
+ * "FOLIO|ORIGEN|DESTINO|…" y el documento lo imprime con espacio ("ATM 000000001").
+ */
+export function normalizeFolio(raw: string): string {
+  let f = raw.trim().split("|")[0].replace(/\s+/g, "").toUpperCase();
+  if (/^[A-Z]{2,6}-\d{7,}$/.test(f)) f = f.replace("-", "");
+  return f;
+}
+
+/** ATM000000001 → "ATM 000000001", como se imprime en la guía. */
+export function printedFolio(folio?: string | null): string {
+  if (!folio) return "";
+  const m = /^([A-Z]+)-?(\d+)$/.exec(folio);
+  return m ? `${m[1]} ${m[2]}` : folio;
+}
+
 export function uuid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
