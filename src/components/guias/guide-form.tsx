@@ -17,6 +17,7 @@ import { useConcepts, useInvalidateOperation, useRecipients, useSenders, useShif
 import type { Address, DuplicateMatch, Guide, GuideRequest, Recipient } from "@/lib/api/types";
 import { joinAddress, uuid } from "@/lib/format";
 import { useSession } from "@/lib/session";
+import { useDebounced } from "@/hooks/use-debounced";
 import { cn } from "@/lib/utils";
 
 interface ItemRow { key: string; conceptId: string; description: string; quantity: string; unit: string; weightKg: string }
@@ -38,14 +39,6 @@ function newItem(conceptId = AUTO): ItemRow {
   return { key: uuid(), conceptId, description: "", quantity: "1", unit: "", weightKg: "" };
 }
 
-function useDebounced<T>(value: T, ms = 250) {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return v;
-}
 
 /** Captura rápida de guías (alta y edición de borradores). */
 export function GuideForm({ draft }: { draft?: Guide }) {

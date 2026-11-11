@@ -17,6 +17,7 @@ import { useIncidents, useInvalidateOperation } from "@/lib/api/hooks";
 import type { Incident, IncidentStatus } from "@/lib/api/types";
 import { fmtDateTime } from "@/lib/format";
 import { useSession } from "@/lib/session";
+import { useDebounced } from "@/hooks/use-debounced";
 
 export function IncidentsView() {
   const params = useSearchParams();
@@ -24,7 +25,8 @@ export function IncidentsView() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [openId, setOpenId] = useState<number | null>(params.get("id") ? Number(params.get("id")) : null);
-  const list = useIncidents({ status: status || undefined, q: q || undefined, page: page - 1 });
+  const dq = useDebounced(q.trim());
+  const list = useIncidents({ status: status || undefined, q: dq || undefined, page: page - 1 });
   return (
     <>
       <PageHeader title="Incidencias" description="Seguimiento y resolución. Al resolver, la guía vuelve a su estado previo, se retiene o se cancela." />

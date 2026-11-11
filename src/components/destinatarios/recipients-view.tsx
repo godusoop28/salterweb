@@ -14,6 +14,7 @@ import { qk, useRecipients, useSenders } from "@/lib/api/hooks";
 import type { DuplicateMatch, Recipient } from "@/lib/api/types";
 import { joinAddress } from "@/lib/format";
 import { useSession } from "@/lib/session";
+import { useDebounced } from "@/hooks/use-debounced";
 import { ImportWizard } from "./import-wizard";
 
 const PAGE = 25;
@@ -32,7 +33,8 @@ export function RecipientsView() {
   const qc = useQueryClient();
   const toast = useToast();
 
-  const list = useRecipients({ senderId, q: q.trim() || undefined, page: page - 1, size: PAGE }, !!senderId || !restricted);
+  const dq = useDebounced(q.trim());
+  const list = useRecipients({ senderId, q: dq || undefined, page: page - 1, size: PAGE }, !!senderId || !restricted);
   const remove = useMutation({
     mutationFn: (r: Recipient) => api.del(`/recipients/${r.id}`),
     onSuccess: async () => { await qc.invalidateQueries({ queryKey: qk.recipients }); toast.success("Destinatario dado de baja", "Las guías emitidas conservan sus datos."); },

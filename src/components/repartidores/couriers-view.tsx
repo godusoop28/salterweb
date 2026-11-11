@@ -15,6 +15,7 @@ import { api, errorMessage } from "@/lib/api/client";
 import { qk, useCouriers, useGuides, useInvalidateOperation } from "@/lib/api/hooks";
 import type { Courier, CourierStatus } from "@/lib/api/types";
 import { useSession } from "@/lib/session";
+import { useDebounced } from "@/hooks/use-debounced";
 
 const STATUS: Record<CourierStatus, [string, "green" | "blue" | "orange" | "slate"]> = {
   DISPONIBLE: ["Disponible", "green"], EN_RUTA: ["En ruta", "blue"], DESCANSO: ["Descanso", "orange"], INACTIVO: ["Inactivo", "slate"],
@@ -91,7 +92,8 @@ function AssignModal({ courier, onClose }: { courier: Courier; onClose: () => vo
   const toast = useToast();
   const invalidate = useInvalidateOperation();
   const [q, setQ] = useState("");
-  const guides = useGuides({ q: q || undefined, status: ["LISTA_SALIDA", "EN_TRANSITO", "RECIBIDA_DESTINO"], size: 50 });
+  const dq = useDebounced(q.trim());
+  const guides = useGuides({ q: dq || undefined, status: ["LISTA_SALIDA", "EN_TRANSITO", "RECIBIDA_DESTINO"], size: 50 });
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const assign = useMutation({

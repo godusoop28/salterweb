@@ -18,6 +18,7 @@ import { useCouriers, useReportSummary, useSenders, useShifts } from "@/lib/api/
 import type { GuideStatus } from "@/lib/api/types";
 import { daysAgoKey, fmtDate, fmtNumber, todayKey } from "@/lib/format";
 import { useSession } from "@/lib/session";
+import { useDebounced } from "@/hooks/use-debounced";
 
 /** Dashboard y reportes: todos los cálculos vienen del backend (SQL sobre guías y movimientos). */
 export function ReportsView({ mode }: { mode: "dashboard" | "reports" }) {
@@ -31,10 +32,11 @@ export function ReportsView({ mode }: { mode: "dashboard" | "reports" }) {
   const [courierId, setCourierId] = useState("");
   const [status, setStatus] = useState<GuideStatus | "">("");
   const [destination, setDestination] = useState("");
+  const dDestination = useDebounced(destination.trim());
   const senders = useSenders({});
   const shifts = useShifts();
   const couriers = useCouriers(undefined, general && can("COURIERS_VIEW", "ASSIGNMENTS_MANAGE", "COURIERS_MANAGE"));
-  const params = { from, to, senderId: senderId || undefined, shiftId: shiftId || undefined, courierId: courierId || undefined, status: status || undefined, destination: destination || undefined };
+  const params = { from, to, senderId: senderId || undefined, shiftId: shiftId || undefined, courierId: courierId || undefined, status: status || undefined, destination: dDestination || undefined };
   const q = useReportSummary(params);
   const s = q.data;
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useDebounced } from "@/hooks/use-debounced";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Store } from "lucide-react";
@@ -17,7 +18,8 @@ import { joinAddress } from "@/lib/format";
 
 export function SendersView() {
   const [q, setQ] = useState("");
-  const list = useSenders({ q: q || undefined });
+  const dq = useDebounced(q.trim());
+  const list = useSenders({ q: dq || undefined });
   const [editing, setEditing] = useState<Sender | "new" | null>(null);
   return (
     <>

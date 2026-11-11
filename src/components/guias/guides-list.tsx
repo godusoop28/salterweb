@@ -13,6 +13,7 @@ import { useGuides, useSenders, useShifts } from "@/lib/api/hooks";
 import type { GuideStatus } from "@/lib/api/types";
 import { fmtDateTime } from "@/lib/format";
 import { useSession } from "@/lib/session";
+import { useDebounced } from "@/hooks/use-debounced";
 
 const PAGE_SIZE = 25;
 
@@ -30,8 +31,9 @@ export function GuidesList() {
   const all = can("GUIDES_VIEW_ALL");
   const senders = useSenders({});
   const shifts = useShifts();
+  const dq = useDebounced(q.trim());
   const query = useGuides({
-    q: q.trim() || undefined, status: status ? [status] : undefined, senderId: senderId ? Number(senderId) : undefined,
+    q: dq || undefined, status: status ? [status] : undefined, senderId: senderId ? Number(senderId) : undefined,
     shiftId: shiftId ? Number(shiftId) : undefined, from: from || undefined, to: to || undefined, page: page - 1, size: PAGE_SIZE,
   });
   const title = all ? "Guías" : can("SHIPMENTS_OWN") ? "Mis envíos" : "Mis guías";

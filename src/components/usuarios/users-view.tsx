@@ -15,6 +15,7 @@ import { qk, useCouriers, usePermissionCatalog, useRoles, useSenders, useUsers }
 import type { Permission, RoleCode, RoleInfo, UserAccount } from "@/lib/api/types";
 import { fmtDateTime } from "@/lib/format";
 import { useSession } from "@/lib/session";
+import { useDebounced } from "@/hooks/use-debounced";
 
 export function UsersView() {
   const { can } = useSession();
@@ -33,7 +34,8 @@ function UsersTab() {
   const [role, setRole] = useState("");
   const [page, setPage] = useState(1);
   const roles = useRoles();
-  const list = useUsers({ q: q || undefined, role: role || undefined, page: page - 1 });
+  const dq = useDebounced(q.trim());
+  const list = useUsers({ q: dq || undefined, role: role || undefined, page: page - 1 });
   const [editing, setEditing] = useState<UserAccount | "new" | null>(null);
   const [resetting, setResetting] = useState<UserAccount | null>(null);
   return (
