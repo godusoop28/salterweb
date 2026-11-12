@@ -131,7 +131,7 @@ function DemoAccess() {
         <FlaskConical className="size-4" aria-hidden /> Acceso rápido de pruebas
       </p>
       <p className="mt-1 text-xs text-muted">Entra con un clic. Ya adentro, cambia de rol cuando quieras con la barra naranja «Probar como» de arriba.</p>
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {info.roles.map((r) => (
           <button
             key={r.code}

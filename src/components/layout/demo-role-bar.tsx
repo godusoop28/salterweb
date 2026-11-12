@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FlaskConical } from "lucide-react";
 import { api, errorMessage } from "@/lib/api/client";
 import type { LoginResponse } from "@/lib/api/types";
@@ -22,7 +22,8 @@ export const DEMO_EMAIL_SUFFIX = ".demo@salter.test";
 
 /**
  * Barra de PRUEBAS: cambia de rol con un solo clic, sin cerrar sesión.
- * Sólo aparece para los usuarios de prueba (*.demo@salter.test).
+ * Aparece con cualquier usuario mientras la API tenga activo el acceso de pruebas (SALTER_DEMO_ACCESS);
+ * si está desactivado, sólo la verían los usuarios de prueba (*.demo@salter.test), y el cambio fallaría.
  */
 export function DemoRoleBar({ className }: { className?: string }) {
   const { me } = useSession();
@@ -30,7 +31,13 @@ export function DemoRoleBar({ className }: { className?: string }) {
   const qc = useQueryClient();
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
-  if (!me || !me.email.endsWith(DEMO_EMAIL_SUFFIX)) return null;
+  const demo = useQuery({
+    queryKey: ["auth", "demo"],
+    queryFn: () => api.get<{ enabled: boolean }>("/auth/demo"),
+    staleTime: Infinity,
+    retry: false,
+  });
+  if (!me || !(demo.data?.enabled || me.email.endsWith(DEMO_EMAIL_SUFFIX))) return null;
 
   const switchTo = async (role: string) => {
     if (role === me.role || busy) return;
