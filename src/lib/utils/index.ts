@@ -6,7 +6,8 @@ export function cn(...classes: ClassValue[]): string {
 
 export function initials(name: string): string {
   return name
-    .split(" ")
+    .replace(/[^\p{L}\s]/gu, " ")
+    .split(/\s+/)
     .filter((w) => w.length > 2 || /^[A-ZÁÉÍÓÚ]/.test(w))
     .slice(0, 2)
     .map((w) => w[0])

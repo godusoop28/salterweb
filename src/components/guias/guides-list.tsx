@@ -43,8 +43,8 @@ export function GuidesList() {
     <>
       <PageHeader title={title} description={all ? "Todas las guías, con su estado actual." : "Consulta el estado y los documentos de tus guías."}
         actions={can("GUIDES_CREATE") && <ButtonLink href="/guias/nueva" icon={<FilePlus2 className="size-4" />}>Nueva guía</ButtonLink>} />
-      <Card className="mb-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-6">
-        <Input className="lg:col-span-2" placeholder="Folio, destinatario, ciudad, referencia…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} aria-label="Buscar" />
+      <Card className="mb-4 grid grid-cols-2 gap-3 p-4 lg:grid-cols-6">
+        <Input className="col-span-2" placeholder="Folio, destinatario, ciudad, referencia…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} aria-label="Buscar" />
         <Select value={status} onChange={(e) => { setStatus(e.target.value as GuideStatus); setPage(1); }} aria-label="Estado">
           <option value="">Todos los estados</option>
           {GUIDE_STATUS_ORDER.map((s) => <option key={s} value={s}>{GUIDE_STATUS[s].label}</option>)}

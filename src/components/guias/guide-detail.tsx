@@ -104,7 +104,7 @@ function Detail({ g, onAction, onEdit, onConfirm, confirming, onPdf }: {
               </table>
             </div>
           </Card>
-          <Card className="grid gap-4 p-5 sm:grid-cols-3">
+          <Card className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-3">
             <InfoRow label="Ruta">{g.shipping?.originCode || g.shipping?.destinationCode ? `${g.shipping.originCode ?? "—"} → ${g.shipping.destinationCode ?? "—"}` : "—"}</InfoRow>
             <InfoRow label="Servicio">{g.shipping?.serviceType ? `Servicio ${g.shipping.serviceType.toLowerCase()}` : "—"}</InfoRow>
             <InfoRow label="Fecha compromiso">{g.shipping?.commitmentDate ? fmtDate(g.shipping.commitmentDate) : g.status === "BORRADOR" ? "Se calcula al confirmar" : "—"}</InfoRow>
@@ -114,10 +114,10 @@ function Detail({ g, onAction, onEdit, onConfirm, confirming, onPdf }: {
             <InfoRow label="Clave CD">{g.cdReference ?? "—"}</InfoRow>
             <InfoRow label="Pedido">{g.orderReference ?? "—"}</InfoRow>
             <InfoRow label="Turno">{g.shift?.name ?? "—"}</InfoRow>
-            <InfoRow label="Elaboró">{g.createdBy.name} · {fmtDateTime(g.createdAt)}</InfoRow>
-            <InfoRow label="Confirmó">{g.confirmedBy ? `${g.confirmedBy.name} · ${fmtDateTime(g.confirmedAt)}` : "—"}</InfoRow>
-            {g.notes && <div className="sm:col-span-3"><InfoRow label="Observaciones">{g.notes}</InfoRow></div>}
-            {g.cancelReason && <div className="sm:col-span-3"><InfoRow label="Motivo de cancelación">{g.cancelReason}</InfoRow></div>}
+            <div className="col-span-2 sm:col-span-1"><InfoRow label="Elaboró">{g.createdBy.name} · {fmtDateTime(g.createdAt)}</InfoRow></div>
+            <div className="col-span-2 sm:col-span-1"><InfoRow label="Confirmó">{g.confirmedBy ? `${g.confirmedBy.name} · ${fmtDateTime(g.confirmedAt)}` : "—"}</InfoRow></div>
+            {g.notes && <div className="col-span-2 sm:col-span-3"><InfoRow label="Observaciones">{g.notes}</InfoRow></div>}
+            {g.cancelReason && <div className="col-span-2 sm:col-span-3"><InfoRow label="Motivo de cancelación">{g.cancelReason}</InfoRow></div>}
           </Card>
         </div>
         <div className="space-y-5">

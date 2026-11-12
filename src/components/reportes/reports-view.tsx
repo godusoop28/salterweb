@@ -52,23 +52,23 @@ export function ReportsView({ mode }: { mode: "dashboard" | "reports" }) {
           <Button variant="outline" icon={<Sheet className="size-4" />} onClick={() => exportAs("xlsx")}>Excel</Button>
           <Button variant="outline" icon={<FileText className="size-4" />} onClick={() => exportAs("pdf")}>PDF</Button>
         </>} />
-      <Card className="mb-5 grid gap-3 p-4 sm:grid-cols-3 lg:grid-cols-7">
+      <Card className="mb-5 grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
         <Input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} aria-label="Desde" />
         <Input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} aria-label="Hasta" />
         {general && (
           <Select value={senderId} onChange={(e) => setSenderId(e.target.value)} aria-label="Remitente">
-            <option value="">Todos los remitentes</option>{senders.data?.content.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            <option value="">Remitente (todos)</option>{senders.data?.content.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
           </Select>
         )}
-        <Select value={shiftId} onChange={(e) => setShiftId(e.target.value)} aria-label="Turno"><option value="">Todos los turnos</option>{shifts.data?.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</Select>
-        <Select value={status} onChange={(e) => setStatus(e.target.value as GuideStatus)} aria-label="Estado"><option value="">Todos los estados</option>{GUIDE_STATUS_ORDER.map((x) => <option key={x} value={x}>{GUIDE_STATUS[x].label}</option>)}</Select>
-        {couriers.data && <Select value={courierId} onChange={(e) => setCourierId(e.target.value)} aria-label="Repartidor"><option value="">Todos los repartidores</option>{couriers.data.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>}
-        <Input placeholder="Destino (ciudad/estado)" value={destination} onChange={(e) => setDestination(e.target.value)} aria-label="Destino" />
+        <Select value={shiftId} onChange={(e) => setShiftId(e.target.value)} aria-label="Turno"><option value="">Turno (todos)</option>{shifts.data?.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</Select>
+        <Select value={status} onChange={(e) => setStatus(e.target.value as GuideStatus)} aria-label="Estado"><option value="">Estado (todos)</option>{GUIDE_STATUS_ORDER.map((x) => <option key={x} value={x}>{GUIDE_STATUS[x].label}</option>)}</Select>
+        {couriers.data && <Select value={courierId} onChange={(e) => setCourierId(e.target.value)} aria-label="Repartidor"><option value="">Repartidor (todos)</option>{couriers.data.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>}
+        <Input className="col-span-2 sm:col-span-1" placeholder="Destino (ciudad/estado)" value={destination} onChange={(e) => setDestination(e.target.value)} aria-label="Destino" />
       </Card>
       <QueryState loading={q.isLoading} error={q.error} onRetry={() => q.refetch()}>
         {s && (
           <div className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-5">
               <StatCard label="Guías elaboradas" value={fmtNumber(s.generated)} icon={FilePen} tone="navy" hint="En el periodo" />
               <StatCard label="Confirmadas" value={fmtNumber(s.confirmed)} icon={CircleCheck} tone="blue" hint="En el periodo" />
               <StatCard label="Listas para salida" value={fmtNumber(s.readyForDispatch)} icon={ClipboardCheck} tone="sky" hint="Ahora" />

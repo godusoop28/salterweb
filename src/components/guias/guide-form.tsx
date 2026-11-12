@@ -274,7 +274,7 @@ export function GuideForm({ draft }: { draft?: Guide }) {
             <h3 className="text-base font-bold text-ink">Ruta y servicio</h3>
             {currentSender && <span className="text-[13px] text-muted">Folio: <span className="font-mono font-semibold text-ink">{currentSender.effectiveGuidePrefix} 000000000</span></span>}
           </div>
-          <div className="grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
             <Field label="Plaza de origen" error={errors.origin} hint={currentSender?.plazaCode ? `Del remitente: ${currentSender.plazaCode}` : "Ej. PBA"}>
               <Input value={originCode} maxLength={5} placeholder="PBA" className="font-mono text-lg uppercase"
                 onChange={(e) => setOrigin(plaza(e.target.value))} />
@@ -285,7 +285,7 @@ export function GuideForm({ draft }: { draft?: Guide }) {
                 onChange={(e) => setDestination(plaza(e.target.value))} />
             </Field>
           </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
             <Field label="Servicio">
               <Select value={serviceCode} onChange={(e) => { setService(e.target.value); setCommitment(""); }}>
                 {(services.data ?? [{ code: "ORDINARIO", days: 1 }]).map((s) => <option key={s.code} value={s.code}>{s.code}</option>)}
@@ -295,7 +295,7 @@ export function GuideForm({ draft }: { draft?: Guide }) {
               <Input type="date" value={commitment || addDaysKey(serviceDays)} min={todayKey()}
                 onChange={(e) => setCommitment(e.target.value)} />
             </Field>
-            <Field label="Dimensiones (cm)" hint="Largo x ancho x alto">
+            <Field label="Dimensiones (cm)" hint="Largo x ancho x alto" className="col-span-2 sm:col-span-1">
               <Input value={dimensions} placeholder="30 x 20 x 15" onChange={(e) => setDimensions(e.target.value)} />
             </Field>
           </div>
@@ -397,7 +397,7 @@ export function GuideForm({ draft }: { draft?: Guide }) {
                   <Input inputMode="decimal" value={it.quantity} onChange={(e) => setItems(items.map((x) => (x.key === it.key ? { ...x, quantity: e.target.value } : x)))} aria-label="Cantidad" />
                 </Field>
                 <Field label={idx === 0 ? "Unidad" : ""}>
-                  <Input value={it.unit} placeholder="Del concepto" onChange={(e) => setItems(items.map((x) => (x.key === it.key ? { ...x, unit: e.target.value } : x)))} aria-label="Unidad" />
+                  <Input value={it.unit} placeholder="Auto" onChange={(e) => setItems(items.map((x) => (x.key === it.key ? { ...x, unit: e.target.value } : x)))} aria-label="Unidad" />
                 </Field>
                 <Field label={idx === 0 ? "Peso (kg)" : ""}>
                   <Input inputMode="decimal" value={it.weightKg} placeholder="Opcional" onChange={(e) => setItems(items.map((x) => (x.key === it.key ? { ...x, weightKg: e.target.value } : x)))} aria-label="Peso" />

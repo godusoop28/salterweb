@@ -30,8 +30,8 @@ export function ManifestsList() {
     <>
       <PageHeader title="Manifiestos y salidas" description="Agrupa guías confirmadas por turno o lote, ciérralos y autoriza la salida por separado."
         actions={can("MANIFESTS_MANAGE") && <ButtonLink href="/manifiestos/nuevo" icon={<Plus className="size-4" />}>Nuevo manifiesto</ButtonLink>} />
-      <Card className="mb-4 grid gap-3 p-4 sm:grid-cols-3">
-        <Select value={status} onChange={(e) => { setStatus(e.target.value as ManifestStatus); setPage(1); }} aria-label="Estado">
+      <Card className="mb-4 grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
+        <Select className="col-span-2 sm:col-span-1" value={status} onChange={(e) => { setStatus(e.target.value as ManifestStatus); setPage(1); }} aria-label="Estado">
           <option value="">Todos los estados</option><option value="BORRADOR">Borrador</option><option value="CERRADO">Cerrado</option><option value="DESPACHADO">Despachado</option>
         </Select>
         <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Desde" />
@@ -189,7 +189,7 @@ export function ManifestDetail({ id }: { id: number }) {
                 {a.has("DELETE") && <Button variant="ghost" className="text-red-600" icon={<Trash2 className="size-4" />} onClick={() => setDialog("delete")}>Eliminar</Button>}
               </div>
             </div>
-            <Card className="mb-5 grid gap-4 p-5 sm:grid-cols-4">
+            <Card className="mb-5 grid grid-cols-2 gap-4 p-5 sm:grid-cols-4">
               <InfoRow label="Fecha de operación">{fmtDate(m.operationDate)}</InfoRow>
               <InfoRow label="Turno">{m.shift?.name ?? "—"}</InfoRow>
               <InfoRow label="Remitente">{m.sender?.name ?? "Varios"}</InfoRow>
