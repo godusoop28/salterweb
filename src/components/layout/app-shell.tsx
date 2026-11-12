@@ -124,7 +124,7 @@ function UserMenu() {
           </div>
           <div className="my-1 border-t border-line-soft" />
           <button onClick={() => void logout()} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50">
-            <LogOut className="size-4" aria-hidden /> Cerrar sesión
+            <LogOut className="size-4" aria-hidden /> {me.email.endsWith(".demo@salter.test") ? "Cambiar de rol (cerrar sesión)" : "Cerrar sesión"}
           </button>
         </div>
       )}

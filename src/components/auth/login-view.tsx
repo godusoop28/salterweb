@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowRight, ClipboardList, Eye, EyeOff, Lock, Mail, PackageCheck, ShieldCheck, Truck } from "lucide-react";
+import { ArrowRight, ClipboardList, Eye, EyeOff, FlaskConical, Lock, Mail, PackageCheck, ShieldCheck, Truck } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { InlineError } from "@/components/app/common";
 import { Logo } from "@/components/branding/logo";
@@ -81,11 +81,69 @@ export function LoginView() {
             <InlineError message={serverError} />
             <Button type="submit" size="lg" className="w-full" loading={formState.isSubmitting} iconRight={<ArrowRight className="size-4" />}>Entrar</Button>
           </form>
+          <DemoAccess />
           <p className="mt-8 text-center text-sm text-muted">
             ¿Buscas un envío? <Link href="/rastreo" className="font-semibold text-brand-600 hover:underline">Rastrear guía</Link>
           </p>
         </div>
       </section>
+    </div>
+  );
+}
+
+type DemoInfo = { enabled: boolean; roles: { code: string; name: string; description: string }[] };
+
+/** Acceso de pruebas: entrar con un clic como cada rol. Sólo aparece si la API lo tiene activo (SALTER_DEMO_ACCESS). */
+function DemoAccess() {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const [info, setInfo] = useState<DemoInfo | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.get<DemoInfo>("/auth/demo").then((d) => alive && setInfo(d)).catch(() => alive && setInfo(null));
+    return () => { alive = false; };
+  }, []);
+
+  if (!info?.enabled || info.roles.length === 0) return null;
+
+  const enter = async (role: string) => {
+    setError(null);
+    setBusy(role);
+    try {
+      const res = await api.post<LoginResponse>("/auth/demo-login", { role });
+      qc.clear();
+      qc.setQueryData(["me"], res.user);
+      router.replace(homeFor(res.user));
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="mt-8 rounded-2xl border border-dashed border-accent-400 bg-accent-50/60 p-4">
+      <p className="flex items-center gap-2 text-sm font-bold text-accent-700">
+        <FlaskConical className="size-4" aria-hidden /> Acceso rápido de pruebas
+      </p>
+      <p className="mt-1 text-xs text-muted">Entra con un clic como cualquier rol. Para cambiar de rol, cierra sesión y elige otro.</p>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {info.roles.map((r) => (
+          <button
+            key={r.code}
+            type="button"
+            title={r.description}
+            disabled={busy !== null}
+            onClick={() => void enter(r.code)}
+            className="rounded-xl border border-line bg-white px-3 py-2 text-left text-sm font-semibold text-ink shadow-sm transition hover:border-brand-600 hover:text-brand-600 disabled:opacity-60"
+          >
+            {busy === r.code ? "Entrando…" : r.name.replace(" (pruebas)", "")}
+          </button>
+        ))}
+      </div>
+      <InlineError message={error} />
     </div>
   );
 }
