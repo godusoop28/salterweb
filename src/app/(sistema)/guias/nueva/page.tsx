@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Nueva guía" };
 export default function NuevaGuiaPage() {
   return (
     <>
-      <PageHeader eyebrow="Elaboración" title="Nueva guía" description="Busca al destinatario, agrega la mercancía y confirma. El folio lo asigna el sistema." />
+      <PageHeader eyebrow="Elaboración" title="Nueva guía" description="Cliente, pedido, bultos y tipo de bulto. El folio lo asigna el sistema." />
       <GuideForm />
     </>
   );

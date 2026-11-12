@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
-  CircleCheck, FilePlus2, FileText, Keyboard, Plus, Save, Search, Trash2, UserPlus, UserRound, X,
+  ChevronDown, CircleCheck, FilePlus2, FileText, Keyboard, Save, Search, UserPlus, UserRound, X,
 } from "lucide-react";
 import { InlineError } from "@/components/app/common";
+import { RecipientEditor } from "@/components/destinatarios/recipient-editor";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Card } from "@/components/ui/primitives";
@@ -20,15 +21,18 @@ import { useSession } from "@/lib/session";
 import { useDebounced } from "@/hooks/use-debounced";
 import { cn } from "@/lib/utils";
 
-interface ItemRow { key: string; conceptId: string; description: string; quantity: string; unit: string; weightKg: string }
 interface NewRcpt { firstName: string; lastName: string; phone: string; email: string; street: string; neighborhood: string; city: string; state: string; zip: string; references: string }
+/** Tipo de bulto seleccionado y su cantidad (la cantidad por tipo sólo se pide cuando hay varios). */
+interface Pack { name: string; qty: string }
 
 const EMPTY_RCPT: NewRcpt = { firstName: "", lastName: "", phone: "", email: "", street: "", neighborhood: "", city: "", state: "", zip: "", references: "" };
 const SENDER_KEY = "salter.guia.remitente";
-
-const AUTO = "auto";
+/** Tipos de bulto que maneja el cliente, en el orden en que los pidió. */
+const PACK_TYPES = ["Caja", "Sobre", "Acumulador", "Tambo", "Tarima"];
+const DEFAULT_PACKS: Pack[] = [{ name: "Caja", qty: "1" }];
 
 const plaza = (v: string) => v.replace(/[^a-zA-Z]/g, "").slice(0, 5).toUpperCase();
+const sameName = (a: string, b: string) => a.trim().localeCompare(b.trim(), "es", { sensitivity: "base" }) === 0;
 
 /** Fecha (YYYY-MM-DD) sumando días a hoy en la zona horaria del negocio. */
 function addDaysKey(days: number): string {
@@ -44,18 +48,15 @@ function rcptFromDraft(draft: Guide): NewRcpt {
     street: a.street ?? "", neighborhood: a.neighborhood ?? "", city: a.city ?? "", state: a.state ?? "", zip: a.zip ?? "", references: a.references ?? "" };
 }
 
-function newItem(conceptId = AUTO): ItemRow {
-  return { key: uuid(), conceptId, description: "", quantity: "1", unit: "", weightKg: "" };
-}
-
-
-/** Captura rápida de guías (alta y edición de borradores). */
+/** Captura rápida de guías (alta y edición de borradores): cliente → pedido(s) → bultos → tipo de bulto. */
 export function GuideForm({ draft }: { draft?: Guide }) {
   const { me, can } = useSession();
   const router = useRouter();
   const toast = useToast();
   const invalidate = useInvalidateOperation();
   const restricted = !can("SENDERS_VIEW");
+  // El remitente sale del registro del usuario; sólo se elige cuando el usuario no tiene uno asignado (punto de venta / administración).
+  const pickSender = !restricted && !me?.sender;
   const senders = useSenders({ active: true });
   const shifts = useShifts();
   const concepts = useConcepts();
@@ -71,31 +72,36 @@ export function GuideForm({ draft }: { draft?: Guide }) {
   });
   const [chosenRecipient, setRecipient] = useState<Recipient | null | undefined>(undefined);
   const recipient = chosenRecipient === undefined ? (draftRecipient.data ?? null) : chosenRecipient;
+  // "new": destinatario capturado sólo para una guía (borradores anteriores). Las guías nuevas usan el catálogo.
   const [mode, setMode] = useState<"search" | "new">(draft && draft.recipientOneTime ? "new" : "search");
   const [rcpt, setRcpt] = useState<NewRcpt>(() => (draft && (draft.recipientOneTime || !draft.recipientId) ? rcptFromDraft(draft) : EMPTY_RCPT));
-  const [saveToCatalog, setSaveToCatalog] = useState(false);
+  const [adding, setAdding] = useState<string | null>(null);
   const [allowProbable, setAllowProbable] = useState(false);
   const [matches, setMatches] = useState<DuplicateMatch[] | null>(null);
   const [cd, setCd] = useState(draft?.cdReference ?? "");
   const [order, setOrder] = useState(draft?.orderReference ?? "");
   const [packages, setPackages] = useState(String(draft?.packageCount ?? 1));
+  const [packs, setPacks] = useState<Pack[]>(() =>
+    draft?.items.length ? draft.items.map((i) => ({ name: i.description, qty: String(i.quantity) })) : DEFAULT_PACKS);
+  const [weight, setWeight] = useState(() => {
+    const w = draft?.items.reduce((sum, i) => sum + (i.weightKg ?? 0), 0) ?? 0;
+    return w > 0 ? String(w) : "";
+  });
   const [notes, setNotes] = useState(draft?.notes ?? "");
+  const [moreOpen, setMoreOpen] = useState(false);
   // Formato oficial de guía: PBA → OAX, dimensiones, servicio y fecha compromiso
   const [origin, setOrigin] = useState<string | null>(draft?.shipping?.originCode ?? null);
   const [destination, setDestination] = useState(draft?.shipping?.destinationCode ?? "");
   const [dimensions, setDimensions] = useState(draft?.shipping?.dimensions ?? "");
   const [service, setService] = useState(draft?.shipping?.serviceType ?? "");
   const [commitment, setCommitment] = useState(draft?.shipping?.commitmentDate ?? "");
-  const [items, setItems] = useState<ItemRow[]>(() =>
-    draft?.items.length
-      ? draft.items.map((i) => ({ key: uuid(), conceptId: i.conceptId ? String(i.conceptId) : "", description: i.description, quantity: String(i.quantity), unit: i.unit, weightKg: i.weightKg != null ? String(i.weightKg) : "" }))
-      : [newItem()]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [done, setDone] = useState<Guide | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const orderRef = useRef<HTMLInputElement>(null);
 
-  // Remitente por defecto: el asignado al usuario o el último usado (preferencia local de interfaz, no dato operativo).
+  // Remitente por defecto: el asignado al usuario o, en punto de venta, el último usado (preferencia local de interfaz).
   const defaultSender = useMemo(() => {
     const list = senders.data?.content ?? [];
     if (!list.length) return undefined;
@@ -108,12 +114,13 @@ export function GuideForm({ draft }: { draft?: Guide }) {
   const originCode = origin ?? currentSender?.plazaCode ?? "";
   const serviceCode = service || services.data?.[0]?.code || "ORDINARIO";
   const serviceDays = services.data?.find((s) => s.code === serviceCode)?.days ?? 1;
-  const totalWeight = items.reduce((sum, i) => sum + (Number(i.weightKg) || 0), 0);
   // Turno actual por defecto.
   const shiftId = chosenShift ?? String(shifts.data?.find((x) => x.current)?.id ?? "");
-  // Concepto por defecto: el primero activo del catálogo.
-  const firstConcept = concepts.data?.find((c) => c.active);
-  const conceptOf = (i: ItemRow) => (i.conceptId === AUTO ? (firstConcept ? String(firstConcept.id) : "") : i.conceptId);
+  // Con varios tipos de bulto, el total de bultos es la suma de cada tipo.
+  const several = packs.length > 1;
+  const totalPackages = several ? packs.reduce((sum, p) => sum + (Number(p.qty) || 0), 0) : Number(packages) || 0;
+  const packTypes = [...PACK_TYPES, ...packs.map((p) => p.name).filter((n) => !PACK_TYPES.some((t) => sameName(t, n)))];
+  const conceptFor = (name: string) => concepts.data?.find((c) => c.active && sameName(c.name, name));
 
   const mutation = useMutation({
     mutationFn: async (confirm: boolean) => {
@@ -121,7 +128,7 @@ export function GuideForm({ draft }: { draft?: Guide }) {
       return draft ? api.put<Guide>(`/guides/${draft.id}`, { ...body, version: draft.version }) : api.post<Guide>("/guides", body);
     },
     onSuccess: async (g) => {
-      if (senderId && !restricted) localStorage.setItem(SENDER_KEY, String(senderId));
+      if (senderId && pickSender) localStorage.setItem(SENDER_KEY, String(senderId));
       await invalidate();
       toast.success(g.folio ? `Guía ${g.folio} confirmada` : "Borrador guardado", g.folio ? "El folio quedó asignado." : "Puedes confirmarlo después.");
       if (draft) router.push(`/guias/${g.id}`);
@@ -143,41 +150,42 @@ export function GuideForm({ draft }: { draft?: Guide }) {
       senderId,
       shiftId: shiftId ? Number(shiftId) : undefined,
       recipientId: mode === "search" ? recipient?.id : undefined,
-      newRecipient: mode === "new" ? { firstName: rcpt.firstName, lastName: rcpt.lastName, phone: rcpt.phone, email: rcpt.email, address, saveToCatalog, allowProbableDuplicate: allowProbable } : undefined,
-      cdReference: cd, orderReference: order, packageCount: Number(packages) || 1, notes,
+      newRecipient: mode === "new" ? { firstName: rcpt.firstName, lastName: rcpt.lastName, phone: rcpt.phone, email: rcpt.email, address, saveToCatalog: false, allowProbableDuplicate: allowProbable } : undefined,
+      cdReference: cd, orderReference: order.trim(), packageCount: totalPackages || 1, notes,
       shipping: {
         originCode: originCode || undefined, destinationCode: destination || undefined, dimensions: dimensions || undefined,
         serviceType: serviceCode, commitmentDate: commitment || undefined,
       },
-      items: items.map((i) => ({
-        conceptId: conceptOf(i) ? Number(conceptOf(i)) : undefined, description: i.description || undefined,
-        quantity: Number(i.quantity), unit: i.unit || undefined, weightKg: i.weightKg ? Number(i.weightKg) : undefined,
-      })),
+      items: packs.map((p, idx) => {
+        const c = conceptFor(p.name);
+        return {
+          conceptId: c?.id, description: c ? undefined : p.name,
+          quantity: several ? Number(p.qty) : totalPackages, unit: c ? undefined : "PIEZA",
+          weightKg: idx === 0 && weight ? Number(weight) : undefined,
+        };
+      }),
       confirm,
     };
   }
 
   function validate(confirm: boolean): boolean {
     const e: Record<string, string> = {};
-    if (!senderId) e.sender = "Selecciona el remitente.";
-    if (mode === "search" && !recipient) e.recipient = "Busca y selecciona un destinatario o captura uno nuevo.";
+    if (!senderId) e.sender = pickSender ? "Selecciona el remitente." : "Tu usuario no tiene remitente asignado. Pide al administrador que lo asigne.";
+    if (mode === "search" && !recipient) e.recipient = "Escribe el nombre del cliente y elígelo de la lista, o agrégalo.";
     if (mode === "new") {
       if (!rcpt.firstName.trim()) e.firstName = "Escribe el nombre.";
       if (rcpt.zip && !/^\d{5}$/.test(rcpt.zip)) e.zip = "5 dígitos.";
-      if (rcpt.phone && rcpt.phone.replace(/\D/g, "").length < 7) e.phone = "Teléfono incompleto.";
-      if (rcpt.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(rcpt.email)) e.email = "Correo no válido.";
       if (confirm && !rcpt.street.trim()) e.street = "Necesaria para confirmar.";
       if (confirm && !rcpt.city.trim()) e.city = "Necesaria para confirmar.";
     }
-    if (!(Number(packages) >= 1)) e.packages = "Mínimo 1.";
+    if (!several && !(Number(packages) >= 1)) e.packages = "Mínimo 1.";
+    if (packs.length === 0) e.packs = "Elige el tipo de bulto.";
+    if (several && packs.some((p) => !(Number(p.qty) >= 1))) e.packs = "Indica cuántos bultos de cada tipo.";
     if (originCode && originCode.length < 2) e.origin = "2 a 5 letras.";
     if (destination && destination.length < 2) e.destination = "2 a 5 letras.";
     if (confirm && !destination) e.destination = "Necesaria para confirmar.";
-    items.forEach((i, idx) => {
-      if (!(Number(i.quantity) > 0)) e[`item${idx}`] = "Cantidad mayor a cero.";
-      if (!conceptOf(i) && !i.description.trim()) e[`item${idx}`] = "Elige un concepto o descríbelo.";
-    });
     setErrors(e);
+    if (e.origin || e.destination) setMoreOpen(true);
     return Object.keys(e).length === 0;
   }
 
@@ -188,23 +196,44 @@ export function GuideForm({ draft }: { draft?: Guide }) {
     mutation.mutate(confirm);
   }
 
+  function chooseRecipient(r: Recipient) {
+    setRecipient(r);
+    setMode("search");
+    setErrors((e) => ({ ...e, recipient: "", destination: "" }));
+    setDestination(r.destinationCode ?? "");
+    setCd(r.subRoute ?? "");
+    if (!r.destinationCode) setMoreOpen(true);
+    setTimeout(() => orderRef.current?.focus(), 30);
+  }
+
+  function togglePack(name: string) {
+    setErrors((e) => ({ ...e, packs: "" }));
+    setPacks((list) => {
+      if (list.some((p) => sameName(p.name, name))) return list.filter((p) => !sameName(p.name, name));
+      // Al pasar de uno a varios tipos, el primero conserva los bultos ya capturados.
+      const base = list.length === 1 ? [{ ...list[0], qty: packages || "1" }] : list;
+      return [...base, { name, qty: list.length === 0 ? packages || "1" : "1" }];
+    });
+  }
+
   function reset() {
     setDone(null);
     setRequestId(uuid());
     setRecipient(null);
     setMode("search");
     setRcpt(EMPTY_RCPT);
-    setSaveToCatalog(false);
     setAllowProbable(false);
     setMatches(null);
     setOrder("");
     setCd("");
     setDestination("");
     setPackages("1");
+    setPacks(DEFAULT_PACKS);
+    setWeight("");
     setNotes("");
     setDimensions("");
     setCommitment("");
-    setItems([newItem()]);
+    setMoreOpen(false);
     setErrors({});
     setServerError(null);
     setTimeout(() => searchRef.current?.focus(), 50);
@@ -213,7 +242,7 @@ export function GuideForm({ draft }: { draft?: Guide }) {
   // Atajo: Ctrl/Cmd + Enter confirma (o guarda si no hay permiso).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !done) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !done && adding === null) {
         e.preventDefault();
         submit(can("GUIDES_CONFIRM"));
       }
@@ -246,180 +275,161 @@ export function GuideForm({ draft }: { draft?: Guide }) {
     );
   }
 
-  const senderName = me?.sender?.name ?? currentSender?.name;
+  const canAdd = can("RECIPIENTS_MANAGE") && !!senderId;
 
   return (
     <form className="grid gap-5 xl:grid-cols-[1fr_340px]" onSubmit={(e) => { e.preventDefault(); submit(can("GUIDES_CONFIRM")); }} noValidate>
       <div className="space-y-5">
-        <Card className="p-5 sm:p-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Remitente" error={errors.sender} required>
-              {restricted ? (
-                <Input value={senderName ?? "Sin remitente asignado"} readOnly className="bg-canvas" />
-              ) : (
-                <Select value={senderId ?? ""} onChange={(e) => { setSenderId(Number(e.target.value)); setRecipient(null); }}>
-                  {senders.data?.content.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </Select>
-              )}
-            </Field>
-            <Field label="Turno">
-              <Select value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
-                <option value="">Automático</option>
-                {shifts.data?.filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}{s.current ? " (actual)" : ""}</option>)}
+        <Card className="space-y-5 p-5 sm:p-6">
+          {pickSender && (
+            <Field label="Remitente" error={errors.sender} required hint="Sólo en punto de venta: los usuarios con remitente asignado no ven este campo.">
+              <Select value={senderId ?? ""} onChange={(e) => { setSenderId(Number(e.target.value)); setRecipient(null); }}>
+                {senders.data?.content.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </Select>
             </Field>
-          </div>
-        </Card>
+          )}
+          {!pickSender && errors.sender && <InlineError message={errors.sender} />}
 
-        <Card className="p-5 sm:p-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-base font-bold text-ink">Consignatario</h3>
-            <div className="inline-flex rounded-xl bg-canvas p-1 text-sm font-semibold">
-              <button type="button" onClick={() => setMode("search")} className={cn("rounded-lg px-3 py-1.5", mode === "search" ? "bg-white text-brand-700 shadow-card" : "text-muted")}>
-                <Search className="mr-1 inline size-4" />Buscar
-              </button>
-              <button type="button" onClick={() => setMode("new")} className={cn("rounded-lg px-3 py-1.5", mode === "new" ? "bg-white text-brand-700 shadow-card" : "text-muted")}>
-                <UserPlus className="mr-1 inline size-4" />Nuevo
-              </button>
-            </div>
-          </div>
+          {/* 1. Cliente */}
           {mode === "search" ? (
             recipient ? (
-              <div className="flex items-start gap-3 rounded-2xl border border-brand-100 bg-brand-50/50 p-4">
-                <UserRound className="mt-0.5 size-5 text-brand-600" aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <p className="font-bold text-ink">{recipient.clientCode && <span className="mr-2 font-mono text-sm font-semibold text-muted">#{recipient.clientCode}</span>}{recipient.fullName}</p>
-                  {recipient.subRoute && <p className="mt-1 text-sm font-semibold text-brand-700">Clave CD {recipient.subRoute} · Destino {recipient.destinationCode}</p>}
-                  {recipient.phone && <p className="text-sm text-muted">{recipient.phone}</p>}
-                  <p className="text-sm text-ink-soft">{joinAddress(recipient.address) || "Sin dirección registrada"}</p>
+              <div>
+                <p className="mb-1.5 text-sm font-semibold text-ink-soft">Nombre del cliente</p>
+                <div className="flex items-start gap-3 rounded-2xl border border-brand-100 bg-brand-50/50 p-4">
+                  <UserRound className="mt-0.5 size-5 text-brand-600" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-ink">{recipient.clientCode && <span className="mr-2 font-mono text-sm font-semibold text-muted">#{recipient.clientCode}</span>}{recipient.fullName}</p>
+                    {recipient.subRoute && <p className="mt-1 text-sm font-semibold text-brand-700">Clave CD {recipient.subRoute} · Destino {recipient.destinationCode}</p>}
+                    <p className="text-sm text-ink-soft">{joinAddress(recipient.address) || "Sin dirección registrada"}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => { setRecipient(null); setDestination(""); setCd(""); setTimeout(() => searchRef.current?.focus(), 30); }} icon={<X className="size-4" />}>Cambiar</Button>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => { setRecipient(null); setDestination(""); setCd(""); setTimeout(() => searchRef.current?.focus(), 30); }} icon={<X className="size-4" />}>Cambiar</Button>
               </div>
             ) : (
-              <RecipientSearch inputRef={searchRef} senderId={senderId} error={errors.recipient}
-                onSelect={(r) => { setRecipient(r); setErrors((e) => ({ ...e, recipient: "", destination: "" })); if (r.destinationCode) setDestination(r.destinationCode); if (r.subRoute) setCd(r.subRoute); }}
-                onCreate={(text) => { setMode("new"); const [f, ...l] = text.trim().split(/\s+/); setRcpt({ ...EMPTY_RCPT, firstName: f ?? "", lastName: l.join(" ") }); }} />
+              <RecipientSearch inputRef={searchRef} senderId={senderId} error={errors.recipient} canAdd={canAdd}
+                onSelect={chooseRecipient} onAdd={(text) => setAdding(text)} />
             )
           ) : (
-            <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Nombre(s)" error={errors.firstName} required><Input value={rcpt.firstName} autoFocus onChange={(e) => setRcpt({ ...rcpt, firstName: e.target.value })} /></Field>
-                <Field label="Apellidos"><Input value={rcpt.lastName} onChange={(e) => setRcpt({ ...rcpt, lastName: e.target.value })} /></Field>
-                <Field label="Teléfono" error={errors.phone}><Input inputMode="tel" value={rcpt.phone} onChange={(e) => setRcpt({ ...rcpt, phone: e.target.value })} /></Field>
-                <Field label="Correo" error={errors.email}><Input type="email" value={rcpt.email} onChange={(e) => setRcpt({ ...rcpt, email: e.target.value })} /></Field>
-                <Field label="Calle y número" error={errors.street} className="sm:col-span-2"><Input value={rcpt.street} onChange={(e) => setRcpt({ ...rcpt, street: e.target.value })} /></Field>
-                <Field label="Colonia"><Input value={rcpt.neighborhood} onChange={(e) => setRcpt({ ...rcpt, neighborhood: e.target.value })} /></Field>
-                <Field label="Ciudad / municipio" error={errors.city}><Input value={rcpt.city} onChange={(e) => setRcpt({ ...rcpt, city: e.target.value })} /></Field>
-                <Field label="Estado"><Input value={rcpt.state} onChange={(e) => setRcpt({ ...rcpt, state: e.target.value })} /></Field>
-                <Field label="C.P." error={errors.zip}><Input inputMode="numeric" maxLength={5} value={rcpt.zip} onChange={(e) => setRcpt({ ...rcpt, zip: e.target.value.replace(/\D/g, "") })} /></Field>
-                <Field label="Referencias" className="sm:col-span-2"><Input value={rcpt.references} onChange={(e) => setRcpt({ ...rcpt, references: e.target.value })} /></Field>
-              </div>
-              <fieldset className="grid gap-2 sm:grid-cols-2">
-                <legend className="sr-only">Uso del destinatario</legend>
-                <label className={cn("flex cursor-pointer gap-3 rounded-2xl border p-3", !saveToCatalog ? "border-brand-300 bg-brand-50" : "border-line")}>
-                  <input type="radio" checked={!saveToCatalog} onChange={() => setSaveToCatalog(false)} className="mt-1" />
-                  <span><span className="block text-sm font-bold text-ink">Usar sólo en esta guía</span><span className="text-[13px] text-muted">No se agrega al catálogo.</span></span>
-                </label>
-                <label className={cn("flex gap-3 rounded-2xl border p-3", !can("RECIPIENTS_MANAGE") ? "cursor-not-allowed opacity-50" : "cursor-pointer", saveToCatalog ? "border-brand-300 bg-brand-50" : "border-line")}>
-                  <input type="radio" checked={saveToCatalog} disabled={!can("RECIPIENTS_MANAGE")} onChange={() => setSaveToCatalog(true)} className="mt-1" />
-                  <span><span className="block text-sm font-bold text-ink">Guardar para futuros envíos</span><span className="text-[13px] text-muted">Queda disponible en el buscador.</span></span>
-                </label>
-              </fieldset>
-              {matches && matches.length > 0 && (
-                <div className="rounded-2xl border border-accent-100 bg-accent-50 p-3 text-sm">
-                  <p className="font-bold text-accent-700">Coincidencias en el catálogo</p>
-                  <ul className="mt-1 space-y-1 text-ink-soft">
-                    {matches.map((m, i) => (
-                      <li key={i} className="flex flex-wrap items-center justify-between gap-2">
-                        <span>{m.name} — {m.reason} ({m.level === "EXACT" ? "duplicado" : "posible"})</span>
-                        {m.recipientId && (
-                          <Button size="sm" variant="outline" onClick={() => { void api.get<Recipient>(`/recipients/${m.recipientId}`).then((r) => { setRecipient(r); setMode("search"); setMatches(null); setServerError(null); }); }}>Usar este</Button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                  {!matches.some((m) => m.level === "EXACT") && (
-                    <label className="mt-2 flex items-center gap-2 font-semibold text-ink"><input type="checkbox" checked={allowProbable} onChange={(e) => setAllowProbable(e.target.checked)} /> Es una persona distinta; guardar de todas formas</label>
-                  )}
-                </div>
+            <OneTimeRecipient rcpt={rcpt} setRcpt={setRcpt} errors={errors} />
+          )}
+          {matches && matches.length > 0 && (
+            <div className="rounded-2xl border border-accent-100 bg-accent-50 p-3 text-sm">
+              <p className="font-bold text-accent-700">Coincidencias en el catálogo</p>
+              <ul className="mt-1 space-y-1 text-ink-soft">
+                {matches.map((m, i) => (
+                  <li key={i} className="flex flex-wrap items-center justify-between gap-2">
+                    <span>{m.name} — {m.reason} ({m.level === "EXACT" ? "duplicado" : "posible"})</span>
+                    {m.recipientId && (
+                      <Button size="sm" variant="outline" onClick={() => { void api.get<Recipient>(`/recipients/${m.recipientId}`).then((r) => { chooseRecipient(r); setMatches(null); setServerError(null); }); }}>Usar este</Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {!matches.some((m) => m.level === "EXACT") && (
+                <label className="mt-2 flex items-center gap-2 font-semibold text-ink"><input type="checkbox" checked={allowProbable} onChange={(e) => setAllowProbable(e.target.checked)} /> Es una persona distinta; guardar de todas formas</label>
               )}
             </div>
           )}
+
+          <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
+            {/* 2. Pedido(s) */}
+            <Field label="Número de pedido" hint="Si son varios, sepáralos con coma (ej. 4501, 4502)">
+              <Input ref={orderRef} value={order} maxLength={80} placeholder="Ej. 4501" onChange={(e) => setOrder(e.target.value)} />
+            </Field>
+            {/* 3. Bultos */}
+            <Field label="Cantidad de bultos" error={errors.packages} required hint={several ? "Suma de cada tipo" : undefined}>
+              <Input inputMode="numeric" value={several ? String(totalPackages) : packages} readOnly={several} className={cn("text-lg font-bold", several && "bg-canvas")}
+                onChange={(e) => setPackages(e.target.value.replace(/\D/g, ""))} />
+            </Field>
+          </div>
+
+          {/* 4. Tipo de bulto (uno o varios) */}
+          <div>
+            <p className="text-sm font-semibold text-ink-soft">Tipo de bulto<span className="ml-0.5 text-accent-600" aria-hidden>*</span> <span className="font-normal text-muted">· puedes elegir varios</span></p>
+            <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Tipo de bulto">
+              {packTypes.map((t) => {
+                const on = packs.some((p) => sameName(p.name, t));
+                return (
+                  <button key={t} type="button" aria-pressed={on} onClick={() => togglePack(t)}
+                    className={cn("rounded-xl border px-4 py-2 text-sm font-semibold transition",
+                      on ? "border-brand-600 bg-brand-600 text-white" : "border-line bg-white text-ink-soft hover:border-brand-400 hover:text-brand-700")}>
+                    {t}
+                  </button>
+                );
+              })}
+            </div>
+            {several && (
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                {packs.map((p) => (
+                  <Field key={p.name} label={`¿Cuántos? ${p.name}`}>
+                    <Input inputMode="numeric" value={p.qty}
+                      onChange={(e) => { const v = e.target.value.replace(/\D/g, ""); setPacks((list) => list.map((x) => (x.name === p.name ? { ...x, qty: v } : x))); }} />
+                  </Field>
+                ))}
+              </div>
+            )}
+            {errors.packs && <p className="mt-1.5 text-[13px] font-semibold text-red-600">{errors.packs}</p>}
+          </div>
         </Card>
 
-        <Card className="p-5 sm:p-6">
-          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="text-base font-bold text-ink">Ruta y servicio</h3>
-            {currentSender && <span className="text-[13px] text-muted">Folio: <span className="font-mono font-semibold text-ink">{currentSender.effectiveGuidePrefix} 000000000</span></span>}
-          </div>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
-            <Field label="Plaza de origen" error={errors.origin} hint={currentSender?.plazaCode ? `Del remitente: ${currentSender.plazaCode}` : "Ej. PBA"}>
-              <Input value={originCode} maxLength={5} placeholder="PBA" className="font-mono text-lg uppercase"
-                onChange={(e) => setOrigin(plaza(e.target.value))} />
-            </Field>
-            <span className="hidden pb-3 text-2xl text-brand-400 sm:block" aria-hidden>→</span>
-            <Field label="Plaza de destino" error={errors.destination} required hint="Ej. OAX">
-              <Input value={destination} maxLength={5} placeholder="OAX" className="font-mono text-lg uppercase"
-                onChange={(e) => setDestination(plaza(e.target.value))} />
-            </Field>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <Field label="Servicio">
-              <Select value={serviceCode} onChange={(e) => { setService(e.target.value); setCommitment(""); }}>
-                {(services.data ?? [{ code: "ORDINARIO", days: 1 }]).map((s) => <option key={s.code} value={s.code}>{s.code}</option>)}
-              </Select>
-            </Field>
-            <Field label="Fecha compromiso" hint={commitment ? "Capturada manualmente" : `Automática: ${serviceDays === 0 ? "mismo día" : `+${serviceDays} día(s)`} al confirmar`}>
-              <Input type="date" value={commitment || addDaysKey(serviceDays)} min={todayKey()}
-                onChange={(e) => setCommitment(e.target.value)} />
-            </Field>
-            <Field label="Dimensiones (cm)" hint="Largo x ancho x alto" className="col-span-2 sm:col-span-1">
-              <Input value={dimensions} placeholder="30 x 20 x 15" onChange={(e) => setDimensions(e.target.value)} />
-            </Field>
-          </div>
-        </Card>
-
-        <Card className="p-5 sm:p-6">
-          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="text-base font-bold text-ink">Mercancía</h3>
-            {totalWeight > 0 && <span className="text-sm text-muted">Peso total: <span className="font-semibold text-ink">{totalWeight} kg</span></span>}
-          </div>
-          <div className="space-y-3">
-            {items.map((it, idx) => (
-              <div key={it.key} className="grid gap-2 rounded-2xl border border-line-soft p-3 sm:grid-cols-[1.4fr_1.4fr_0.7fr_0.8fr_0.8fr_auto] sm:items-end sm:border-0 sm:p-0">
-                <Field label={idx === 0 ? "Concepto" : ""} className={idx ? "sm:[&_label]:hidden" : ""}>
-                  <Select value={conceptOf(it)} onChange={(e) => setItems(items.map((x) => (x.key === it.key ? { ...x, conceptId: e.target.value } : x)))} aria-label="Concepto">
-                    <option value="">Otro (describir)</option>
-                    {concepts.data?.filter((c) => c.active).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        {/* Más datos: se llenan solos con el cliente y el remitente */}
+        <Card className="p-0">
+          <button type="button" onClick={() => setMoreOpen((o) => !o)} aria-expanded={moreOpen}
+            className="flex w-full items-center justify-between gap-2 px-5 py-4 text-left sm:px-6">
+            <span>
+              <span className="block text-base font-bold text-ink">Más datos <span className="font-normal text-muted">(se llenan solos)</span></span>
+              <span className="block text-[13px] text-muted">
+                {originCode || "—"} → {destination || "—"} · {serviceCode}{cd ? ` · Clave CD ${cd}` : ""}
+              </span>
+            </span>
+            <ChevronDown className={cn("size-5 text-muted transition", moreOpen && "rotate-180")} aria-hidden />
+          </button>
+          {moreOpen && (
+            <div className="space-y-4 border-t border-line-soft px-5 pb-5 pt-4 sm:px-6">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+                <Field label="Plaza de origen" error={errors.origin} hint={currentSender?.plazaCode ? `Del remitente: ${currentSender.plazaCode}` : "Ej. PBA"}>
+                  <Input value={originCode} maxLength={5} placeholder="PBA" className="font-mono text-lg uppercase"
+                    onChange={(e) => setOrigin(plaza(e.target.value))} />
+                </Field>
+                <span className="hidden pb-3 text-2xl text-brand-400 sm:block" aria-hidden>→</span>
+                <Field label="Plaza de destino" error={errors.destination} required hint="Sale de la subruta del cliente (ej. OAX)">
+                  <Input value={destination} maxLength={5} placeholder="OAX" className="font-mono text-lg uppercase"
+                    onChange={(e) => setDestination(plaza(e.target.value))} />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                <Field label="Servicio">
+                  <Select value={serviceCode} onChange={(e) => { setService(e.target.value); setCommitment(""); }}>
+                    {(services.data ?? [{ code: "ORDINARIO", days: 1 }]).map((s) => <option key={s.code} value={s.code}>{s.code}</option>)}
                   </Select>
                 </Field>
-                <Field label={idx === 0 ? "Descripción" : ""}>
-                  <Input value={it.description} placeholder={conceptOf(it) ? "Opcional" : "Describe la mercancía"} onChange={(e) => setItems(items.map((x) => (x.key === it.key ? { ...x, description: e.target.value } : x)))} aria-label="Descripción" />
+                <Field label="Fecha compromiso" hint={commitment ? "Capturada manualmente" : `Automática: ${serviceDays === 0 ? "mismo día" : `+${serviceDays} día(s)`}`}>
+                  <Input type="date" value={commitment || addDaysKey(serviceDays)} min={todayKey()}
+                    onChange={(e) => setCommitment(e.target.value)} />
                 </Field>
-                <Field label={idx === 0 ? "Cantidad" : ""} error={errors[`item${idx}`]}>
-                  <Input inputMode="decimal" value={it.quantity} onChange={(e) => setItems(items.map((x) => (x.key === it.key ? { ...x, quantity: e.target.value } : x)))} aria-label="Cantidad" />
+                <Field label="Clave CD" hint="Se imprime junto a las piezas">
+                  <Input value={cd} placeholder="CVA-01" className="uppercase" onChange={(e) => setCd(e.target.value.toUpperCase())} />
                 </Field>
-                <Field label={idx === 0 ? "Unidad" : ""}>
-                  <Input value={it.unit} placeholder="Auto" onChange={(e) => setItems(items.map((x) => (x.key === it.key ? { ...x, unit: e.target.value } : x)))} aria-label="Unidad" />
+                <Field label="Dimensiones (cm)" hint="Largo x ancho x alto">
+                  <Input value={dimensions} placeholder="30 x 20 x 15" onChange={(e) => setDimensions(e.target.value)} />
                 </Field>
-                <Field label={idx === 0 ? "Peso (kg)" : ""}>
-                  <Input inputMode="decimal" value={it.weightKg} placeholder="Opcional" onChange={(e) => setItems(items.map((x) => (x.key === it.key ? { ...x, weightKg: e.target.value } : x)))} aria-label="Peso" />
+                <Field label="Peso total (kg)">
+                  <Input inputMode="decimal" value={weight} placeholder="Opcional" onChange={(e) => setWeight(e.target.value.replace(/[^\d.]/g, ""))} />
                 </Field>
-                <Button variant="ghost" size="icon" disabled={items.length === 1} onClick={() => setItems(items.filter((x) => x.key !== it.key))} aria-label="Quitar concepto"><Trash2 className="size-4" /></Button>
+                <Field label="Turno">
+                  <Select value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
+                    <option value="">Automático</option>
+                    {shifts.data?.filter((s) => s.active).map((s) => <option key={s.id} value={s.id}>{s.name}{s.current ? " (actual)" : ""}</option>)}
+                  </Select>
+                </Field>
               </div>
-            ))}
-            <Button variant="soft" size="sm" icon={<Plus className="size-4" />} onClick={() => setItems([...items, newItem()])}>Agregar concepto</Button>
-          </div>
+              <Field label="Observaciones"><Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+            </div>
+          )}
         </Card>
       </div>
 
       <div className="space-y-5 xl:sticky xl:top-24 xl:self-start">
-        <Card className="space-y-4 p-5">
-          <Field label="Clave CD" hint="Se imprime junto a las piezas (ej. CVA-01)"><Input value={cd} placeholder="CVA-01" className="uppercase" onChange={(e) => setCd(e.target.value.toUpperCase())} /></Field>
-          <Field label="Pedido / referencia"><Input value={order} onChange={(e) => setOrder(e.target.value)} /></Field>
-          <Field label="Piezas" error={errors.packages}><Input inputMode="numeric" value={packages} onChange={(e) => setPackages(e.target.value.replace(/\D/g, ""))} /></Field>
-          <Field label="Observaciones"><Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
-        </Card>
         <Card className="space-y-3 p-5">
           <InlineError message={serverError} />
           {can("GUIDES_CONFIRM") && (
@@ -436,12 +446,35 @@ export function GuideForm({ draft }: { draft?: Guide }) {
           {draft && <Link href={`/guias/${draft.id}`} className="block text-center text-sm font-semibold text-brand-600">Cancelar edición</Link>}
         </Card>
       </div>
+
+      {adding !== null && (
+        <RecipientEditor modal recipient={null} senderId={senderId} initialName={adding}
+          onClose={() => { setAdding(null); setTimeout(() => searchRef.current?.focus(), 30); }}
+          onSaved={(r) => { setAdding(null); chooseRecipient(r); }} />
+      )}
     </form>
   );
 }
 
-function RecipientSearch({ senderId, onSelect, onCreate, error, inputRef }: {
-  senderId?: number; onSelect: (r: Recipient) => void; onCreate: (text: string) => void; error?: string;
+/** Destinatario capturado sólo para una guía (borradores hechos antes del alta en ventana). */
+function OneTimeRecipient({ rcpt, setRcpt, errors }: { rcpt: NewRcpt; setRcpt: (r: NewRcpt) => void; errors: Record<string, string> }) {
+  const set = (k: keyof NewRcpt) => (e: React.ChangeEvent<HTMLInputElement>) => setRcpt({ ...rcpt, [k]: e.target.value });
+  return (
+    <div>
+      <p className="mb-2 text-sm font-semibold text-ink-soft">Cliente (sólo para esta guía)</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Nombre(s)" error={errors.firstName} required><Input value={rcpt.firstName} onChange={set("firstName")} /></Field>
+        <Field label="Apellidos"><Input value={rcpt.lastName} onChange={set("lastName")} /></Field>
+        <Field label="Calle y número" error={errors.street} className="sm:col-span-2"><Input value={rcpt.street} onChange={set("street")} /></Field>
+        <Field label="Ciudad / municipio" error={errors.city}><Input value={rcpt.city} onChange={set("city")} /></Field>
+        <Field label="C.P." error={errors.zip}><Input inputMode="numeric" maxLength={5} value={rcpt.zip} onChange={(e) => setRcpt({ ...rcpt, zip: e.target.value.replace(/\D/g, "") })} /></Field>
+      </div>
+    </div>
+  );
+}
+
+function RecipientSearch({ senderId, onSelect, onAdd, canAdd, error, inputRef }: {
+  senderId?: number; onSelect: (r: Recipient) => void; onAdd: (text: string) => void; canAdd: boolean; error?: string;
   inputRef: React.RefObject<HTMLInputElement | null>;
 }) {
   const [q, setQ] = useState("");
@@ -452,20 +485,25 @@ function RecipientSearch({ senderId, onSelect, onCreate, error, inputRef }: {
 
   return (
     <div>
-      <Field label="Buscar cliente por nombre o número de cliente" error={error}>
-        <Input ref={inputRef} autoFocus value={q} icon={<Search className="size-4" />} placeholder="Ej. camacho, jorges, 11081…"
-          onChange={(e) => { setQ(e.target.value); setActive(0); }}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(a + 1, results.length)); }
-            else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
-            else if (e.key === "Enter" && !(e.ctrlKey || e.metaKey)) {
-              e.preventDefault();
-              if (results[active]) onSelect(results[active]);
-              else if (q.trim()) onCreate(q);
-            }
-          }}
-          role="combobox" aria-expanded={results.length > 0} aria-controls="rcpt-results" aria-autocomplete="list" />
-      </Field>
+      <div className="flex items-start gap-2">
+        <Field label="Nombre del cliente" error={error} required className="flex-1" hint={error ? undefined : "Escribe las primeras letras o el número de cliente y elige de la lista"}>
+          <Input ref={inputRef} autoFocus value={q} icon={<Search className="size-4" />} placeholder="Ej. camacho, jorges, 11081…" autoComplete="off"
+            onChange={(e) => { setQ(e.target.value); setActive(0); }}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(a + 1, canAdd ? results.length : results.length - 1)); }
+              else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
+              else if (e.key === "Enter" && !(e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                if (results[active]) onSelect(results[active]);
+                else if (q.trim() && canAdd) onAdd(q);
+              }
+            }}
+            role="combobox" aria-expanded={results.length > 0} aria-controls="rcpt-results" aria-autocomplete="list" />
+        </Field>
+        {canAdd && (
+          <Button variant="soft" className="mt-[26px] shrink-0" icon={<UserPlus className="size-4" />} onClick={() => onAdd(q)}>Agregar</Button>
+        )}
+      </div>
       {dq.length >= 2 && (
         <ul id="rcpt-results" role="listbox" className="mt-2 divide-y divide-line-soft overflow-hidden rounded-2xl border border-line">
           {results.map((r, i) => (
@@ -480,13 +518,17 @@ function RecipientSearch({ senderId, onSelect, onCreate, error, inputRef }: {
               </button>
             </li>
           ))}
-          {!isFetching && results.length === 0 && <li className="px-4 py-3 text-sm text-muted">Sin coincidencias.</li>}
-          <li role="option" aria-selected={active === results.length}>
-            <button type="button" onClick={() => onCreate(q)} onMouseEnter={() => setActive(results.length)}
-              className={cn("flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-brand-700", active === results.length ? "bg-brand-50" : "hover:bg-canvas")}>
-              <UserPlus className="size-4" /> Registrar «{q.trim()}» como nuevo destinatario
-            </button>
-          </li>
+          {!isFetching && results.length === 0 && (
+            <li className="px-4 py-3 text-sm text-muted">No se encontró «{q.trim()}».{!canAdd && " Pide al administrador que lo dé de alta."}</li>
+          )}
+          {canAdd && (
+            <li role="option" aria-selected={active === results.length}>
+              <button type="button" onClick={() => onAdd(q)} onMouseEnter={() => setActive(results.length)}
+                className={cn("flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-brand-700", active === results.length ? "bg-brand-50" : "hover:bg-canvas")}>
+                <UserPlus className="size-4" /> Agregar «{q.trim()}» como cliente nuevo
+              </button>
+            </li>
+          )}
         </ul>
       )}
     </div>
