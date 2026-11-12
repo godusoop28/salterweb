@@ -91,6 +91,8 @@ export function LoginView() {
   );
 }
 
+const ROLE_LABEL: Record<string, string> = { CAPTURISTA: "Capturista", SUPERVISOR: "Supervisor", RECEPCION: "Recepción", REPARTIDOR: "Repartidor", REMITENTE: "Cliente ATM", ADMIN: "Administrador" };
+
 type DemoInfo = { enabled: boolean; roles: { code: string; name: string; description: string }[] };
 
 /** Acceso de pruebas: entrar con un clic como cada rol. Sólo aparece si la API lo tiene activo (SALTER_DEMO_ACCESS). */
@@ -128,7 +130,7 @@ function DemoAccess() {
       <p className="flex items-center gap-2 text-sm font-bold text-accent-700">
         <FlaskConical className="size-4" aria-hidden /> Acceso rápido de pruebas
       </p>
-      <p className="mt-1 text-xs text-muted">Entra con un clic como cualquier rol. Para cambiar de rol, cierra sesión y elige otro.</p>
+      <p className="mt-1 text-xs text-muted">Entra con un clic. Ya adentro, cambia de rol cuando quieras con la barra naranja «Probar como» de arriba.</p>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
         {info.roles.map((r) => (
           <button
@@ -139,7 +141,7 @@ function DemoAccess() {
             onClick={() => void enter(r.code)}
             className="rounded-xl border border-line bg-white px-3 py-2 text-left text-sm font-semibold text-ink shadow-sm transition hover:border-brand-600 hover:text-brand-600 disabled:opacity-60"
           >
-            {busy === r.code ? "Entrando…" : r.name.replace(" (pruebas)", "")}
+            {busy === r.code ? "Entrando…" : (ROLE_LABEL[r.code] ?? r.name)}
           </button>
         ))}
       </div>
