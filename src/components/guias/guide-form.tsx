@@ -78,6 +78,9 @@ export function GuideForm({ draft }: { draft?: Guide }) {
   const [adding, setAdding] = useState<string | null>(null);
   const [allowProbable, setAllowProbable] = useState(false);
   const [matches, setMatches] = useState<DuplicateMatch[] | null>(null);
+  // Pedido repetido: guías vigentes que ya lo tienen; el usuario decide si es otro envío.
+  const [dupOrder, setDupOrder] = useState<{ message: string; guides: { id: number; reference: string; recipient: string; status: string }[] } | null>(null);
+  const [allowDupOrder, setAllowDupOrder] = useState(false);
   const [cd, setCd] = useState(draft?.cdReference ?? "");
   const [order, setOrder] = useState(draft?.orderReference ?? "");
   const [packages, setPackages] = useState(String(draft?.packageCount ?? 1));
@@ -123,8 +126,8 @@ export function GuideForm({ draft }: { draft?: Guide }) {
   const conceptFor = (name: string) => concepts.data?.find((c) => c.active && sameName(c.name, name));
 
   const mutation = useMutation({
-    mutationFn: async (confirm: boolean) => {
-      const body = buildBody(confirm);
+    mutationFn: async ({ confirm, allowDup }: { confirm: boolean; allowDup: boolean }) => {
+      const body = { ...buildBody(confirm), allowDuplicateOrder: allowDup };
       return draft ? api.put<Guide>(`/guides/${draft.id}`, { ...body, version: draft.version }) : api.post<Guide>("/guides", body);
     },
     onSuccess: async (g) => {
@@ -135,6 +138,10 @@ export function GuideForm({ draft }: { draft?: Guide }) {
       else setDone(g);
     },
     onError: (e) => {
+      if (e instanceof ApiError && e.code === "DUPLICATE_ORDER") {
+        setDupOrder({ message: e.message, guides: (e.data.guides as { id: number; reference: string; recipient: string; status: string }[]) ?? [] });
+        return;
+      }
       if (e instanceof ApiError && (e.code === "RECIPIENT_DUPLICATE" || e.code === "RECIPIENT_PROBABLE_DUPLICATE")) {
         setMatches((e.data.matches as DuplicateMatch[]) ?? []);
       }
@@ -193,7 +200,7 @@ export function GuideForm({ draft }: { draft?: Guide }) {
     setServerError(null);
     if (mutation.isPending) return; // evita doble envío
     if (!validate(confirm)) return;
-    mutation.mutate(confirm);
+    mutation.mutate({ confirm, allowDup: allowDupOrder });
   }
 
   function chooseRecipient(r: Recipient) {
@@ -224,6 +231,8 @@ export function GuideForm({ draft }: { draft?: Guide }) {
     setRcpt(EMPTY_RCPT);
     setAllowProbable(false);
     setMatches(null);
+    setDupOrder(null);
+    setAllowDupOrder(false);
     setOrder("");
     setCd("");
     setDestination("");
@@ -334,7 +343,8 @@ export function GuideForm({ draft }: { draft?: Guide }) {
           <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
             {/* 2. Pedido(s) */}
             <Field label="Número de pedido" hint="Si son varios, sepáralos con coma (ej. 4501, 4502)">
-              <Input ref={orderRef} value={order} maxLength={80} placeholder="Ej. 4501" onChange={(e) => setOrder(e.target.value)} />
+              <Input ref={orderRef} value={order} maxLength={80} placeholder="Ej. 4501"
+                onChange={(e) => { setOrder(e.target.value); setDupOrder(null); setAllowDupOrder(false); }} />
             </Field>
             {/* 3. Bultos */}
             <Field label="Cantidad de bultos" error={errors.packages} required hint={several ? "Suma de cada tipo" : undefined}>
@@ -342,6 +352,24 @@ export function GuideForm({ draft }: { draft?: Guide }) {
                 onChange={(e) => setPackages(e.target.value.replace(/\D/g, ""))} />
             </Field>
           </div>
+
+          {dupOrder && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm" role="alert">
+              <p className="font-bold text-red-700">Posible guía duplicada</p>
+              <p className="mt-1 text-ink-soft">{dupOrder.message}</p>
+              <ul className="mt-2 space-y-1">
+                {dupOrder.guides.map((g) => (
+                  <li key={g.id}><Link href={`/guias/${g.id}`} target="_blank" className="font-semibold text-brand-700 underline">{g.reference}</Link> · {g.recipient} · {g.status}</li>
+                ))}
+              </ul>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => { setDupOrder(null); setTimeout(() => orderRef.current?.focus(), 30); }}>Corregir el pedido</Button>
+                <Button size="sm" variant="ghost" onClick={() => { setAllowDupOrder(true); setDupOrder(null); setServerError(null); if (validate(can("GUIDES_CONFIRM"))) mutation.mutate({ confirm: can("GUIDES_CONFIRM"), allowDup: true }); }}>
+                  Es otro envío: generar de todas formas
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* 4. Tipo de bulto (uno o varios) */}
           <div>
@@ -433,11 +461,11 @@ export function GuideForm({ draft }: { draft?: Guide }) {
         <Card className="space-y-3 p-5">
           <InlineError message={serverError} />
           {can("GUIDES_CONFIRM") && (
-            <Button type="submit" size="lg" className="w-full" loading={mutation.isPending && mutation.variables === true} icon={<CircleCheck className="size-5" />}>
+            <Button type="submit" size="lg" className="w-full" loading={mutation.isPending && mutation.variables?.confirm === true} icon={<CircleCheck className="size-5" />}>
               Confirmar y asignar folio
             </Button>
           )}
-          <Button variant={can("GUIDES_CONFIRM") ? "outline" : "primary"} size="lg" className="w-full" loading={mutation.isPending && mutation.variables === false}
+          <Button variant={can("GUIDES_CONFIRM") ? "outline" : "primary"} size="lg" className="w-full" loading={mutation.isPending && mutation.variables?.confirm === false}
             icon={<Save className="size-5" />} onClick={() => submit(false)}>
             Guardar borrador
           </Button>

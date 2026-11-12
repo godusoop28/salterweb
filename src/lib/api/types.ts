@@ -123,6 +123,8 @@ export interface GuideRequest {
   clientRequestId?: string; senderId?: number; shiftId?: number; recipientId?: number; newRecipient?: NewRecipientInput;
   cdReference?: string; orderReference?: string; packageCount?: number; shipping?: ShippingInput; items: ItemInput[];
   notes?: string; confirm: boolean; version?: number;
+  /** Generar aunque el pedido ya esté en otra guía vigente del remitente. */
+  allowDuplicateOrder?: boolean;
 }
 
 // ─────────── Manifiestos ───────────

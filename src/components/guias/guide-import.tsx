@@ -21,6 +21,8 @@ interface ImportGroup {
   requestId: string; clientName: string; orders: string[]; addressText: string; address: Address; packages: number;
   types: { name: string; quantity: number }[]; lpns: string[]; route?: string; notes?: string;
   matchType?: "EXACT" | "WORDS"; recipient?: Recipient; suggestions?: Recipient[]; existingGuideId?: number; existingFolio?: string;
+  /** Pedidos que ya están en otra guía vigente del remitente (duplicado). */
+  duplicateOrders?: string[];
 }
 interface ImportPreview {
   fileName: string; senderId: number; senderName: string; load?: string; route?: string; declaredPackages?: number;
@@ -167,6 +169,9 @@ export function GuideImport() {
               {preview.load && <span className="text-muted">Carga <b className="text-ink">{preview.load}</b></span>}
               {preview.route && <span className="text-muted">Ruta <b className="text-ink">{preview.route}</b></span>}
               <span className="text-muted"><b className="text-ink">{rows.length}</b> clientes · <b className="text-ink">{preview.totalPackages}</b> bultos</span>
+              {rows.some((g) => g.existingFolio) && (
+                <Badge tone="orange">{rows.filter((g) => g.existingFolio).length} ya tienen guía: no se volverán a generar</Badge>
+              )}
               {preview.declaredPackages != null && (
                 preview.declaredPackages === preview.totalPackages
                   ? <Badge tone="green" icon={CircleCheck}>Coincide con el total del archivo</Badge>
@@ -245,7 +250,11 @@ export function GuideImport() {
                         </td>
                         <td className="px-4 py-3 align-top">
                           {g.existingFolio && !res && (
-                            <Link href={`/guias/${g.existingGuideId}`} className="text-[13px] font-semibold text-brand-600">Ya generada · {printedFolio(g.existingFolio)}</Link>
+                            <div className="text-[13px]">
+                              <Badge tone="orange" size="sm">{g.duplicateOrders?.length ? "Duplicado" : "Ya generada"}</Badge>
+                              <Link href={`/guias/${g.existingGuideId}`} className="mt-1 block font-semibold text-brand-600">{printedFolio(g.existingFolio)}</Link>
+                              {!!g.duplicateOrders?.length && <span className="block text-muted">Pedido {g.duplicateOrders.join(", ")} ya está en esa guía</span>}
+                            </div>
                           )}
                           {res?.ok && res.guide && (
                             <div className="flex items-center gap-2">
