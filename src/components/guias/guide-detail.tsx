@@ -87,8 +87,8 @@ function Detail({ g, onAction, onEdit, onConfirm, confirming, onPdf }: {
             </Card>
             <Card className="p-5">
               <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-subtle">Consignatario</h3>
-              <p className="font-bold text-ink">{g.recipient.name}</p>
-              <p className="text-sm text-muted">{g.recipient.phone ?? "Sin teléfono"}</p>
+              <p className="font-bold text-ink">{g.recipient.clientCode && <span className="mr-2 font-mono text-sm font-semibold text-muted">#{g.recipient.clientCode}</span>}{g.recipient.name}</p>
+              {g.recipient.phone && <p className="text-sm text-muted">{g.recipient.phone}</p>}
               <p className="mt-1 text-sm text-ink-soft">{joinAddress(g.recipient.address) || "Sin dirección"}</p>
               {g.recipient.address.references && <p className="text-[13px] text-muted">Ref.: {g.recipient.address.references}</p>}
             </Card>

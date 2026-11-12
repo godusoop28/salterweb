@@ -47,6 +47,8 @@ export interface Concept { id: number; name: string; unit: string; active: boole
 export interface Recipient {
   id: number; senderId: number; senderName: string; firstName: string; lastName?: string; fullName: string;
   phone?: string; email?: string; address: Address; notes?: string; active: boolean; createdAt: string; version: number;
+  /** Número de cliente, ruta y subruta (Clave CD) del listado del remitente. */
+  clientCode?: string; route?: string; subRoute?: string; destinationCode?: string;
 }
 export interface DuplicateMatch { recipientId?: number; name: string; level: "EXACT" | "PROBABLE"; reason: string }
 
@@ -58,6 +60,7 @@ export interface ImportPreview {
 export interface ImportRow {
   rowNumber: number; firstName?: string; lastName?: string; phone?: string; email?: string; street?: string;
   neighborhood?: string; city?: string; state?: string; zip?: string; references?: string; notes?: string;
+  clientCode?: string; extNumber?: string; route?: string; subRoute?: string;
 }
 export type RowStatus = "VALID" | "ERROR" | "DUPLICATE" | "PROBABLE_DUPLICATE";
 export interface RowResult { rowNumber: number; status: RowStatus; errors: string[]; matches: DuplicateMatch[] }
@@ -81,7 +84,7 @@ export interface GuideSummary {
   createdAt: string; confirmedAt?: string; version: number;
 }
 
-export interface Party { name: string; contact?: string; phone?: string; email?: string; address: Address }
+export interface Party { name: string; contact?: string; phone?: string; email?: string; address: Address; clientCode?: string }
 export interface GuideItem { id: number; position: number; conceptId?: number; description: string; quantity: number; unit: string; weightKg?: number }
 export interface Movement {
   id: number; type: string; typeLabel: string; fromStatus?: GuideStatus; toStatus: GuideStatus; toStatusLabel: string;

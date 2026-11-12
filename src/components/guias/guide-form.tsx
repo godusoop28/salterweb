@@ -198,6 +198,8 @@ export function GuideForm({ draft }: { draft?: Guide }) {
     setAllowProbable(false);
     setMatches(null);
     setOrder("");
+    setCd("");
+    setDestination("");
     setPackages("1");
     setNotes("");
     setDimensions("");
@@ -270,38 +272,6 @@ export function GuideForm({ draft }: { draft?: Guide }) {
         </Card>
 
         <Card className="p-5 sm:p-6">
-          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="text-base font-bold text-ink">Ruta y servicio</h3>
-            {currentSender && <span className="text-[13px] text-muted">Folio: <span className="font-mono font-semibold text-ink">{currentSender.effectiveGuidePrefix} 000000000</span></span>}
-          </div>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
-            <Field label="Plaza de origen" error={errors.origin} hint={currentSender?.plazaCode ? `Del remitente: ${currentSender.plazaCode}` : "Ej. PBA"}>
-              <Input value={originCode} maxLength={5} placeholder="PBA" className="font-mono text-lg uppercase"
-                onChange={(e) => setOrigin(plaza(e.target.value))} />
-            </Field>
-            <span className="hidden pb-3 text-2xl text-brand-400 sm:block" aria-hidden>→</span>
-            <Field label="Plaza de destino" error={errors.destination} required hint="Ej. OAX">
-              <Input value={destination} maxLength={5} placeholder="OAX" className="font-mono text-lg uppercase"
-                onChange={(e) => setDestination(plaza(e.target.value))} />
-            </Field>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <Field label="Servicio">
-              <Select value={serviceCode} onChange={(e) => { setService(e.target.value); setCommitment(""); }}>
-                {(services.data ?? [{ code: "ORDINARIO", days: 1 }]).map((s) => <option key={s.code} value={s.code}>{s.code}</option>)}
-              </Select>
-            </Field>
-            <Field label="Fecha compromiso" hint={commitment ? "Capturada manualmente" : `Automática: ${serviceDays === 0 ? "mismo día" : `+${serviceDays} día(s)`} al confirmar`}>
-              <Input type="date" value={commitment || addDaysKey(serviceDays)} min={todayKey()}
-                onChange={(e) => setCommitment(e.target.value)} />
-            </Field>
-            <Field label="Dimensiones (cm)" hint="Largo x ancho x alto" className="col-span-2 sm:col-span-1">
-              <Input value={dimensions} placeholder="30 x 20 x 15" onChange={(e) => setDimensions(e.target.value)} />
-            </Field>
-          </div>
-        </Card>
-
-        <Card className="p-5 sm:p-6">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-base font-bold text-ink">Consignatario</h3>
             <div className="inline-flex rounded-xl bg-canvas p-1 text-sm font-semibold">
@@ -318,15 +288,16 @@ export function GuideForm({ draft }: { draft?: Guide }) {
               <div className="flex items-start gap-3 rounded-2xl border border-brand-100 bg-brand-50/50 p-4">
                 <UserRound className="mt-0.5 size-5 text-brand-600" aria-hidden />
                 <div className="min-w-0 flex-1">
-                  <p className="font-bold text-ink">{recipient.fullName}</p>
-                  <p className="text-sm text-muted">{recipient.phone ?? "Sin teléfono"}</p>
+                  <p className="font-bold text-ink">{recipient.clientCode && <span className="mr-2 font-mono text-sm font-semibold text-muted">#{recipient.clientCode}</span>}{recipient.fullName}</p>
+                  {recipient.subRoute && <p className="mt-1 text-sm font-semibold text-brand-700">Clave CD {recipient.subRoute} · Destino {recipient.destinationCode}</p>}
+                  {recipient.phone && <p className="text-sm text-muted">{recipient.phone}</p>}
                   <p className="text-sm text-ink-soft">{joinAddress(recipient.address) || "Sin dirección registrada"}</p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => { setRecipient(null); setTimeout(() => searchRef.current?.focus(), 30); }} icon={<X className="size-4" />}>Cambiar</Button>
+                <Button variant="ghost" size="sm" onClick={() => { setRecipient(null); setDestination(""); setCd(""); setTimeout(() => searchRef.current?.focus(), 30); }} icon={<X className="size-4" />}>Cambiar</Button>
               </div>
             ) : (
               <RecipientSearch inputRef={searchRef} senderId={senderId} error={errors.recipient}
-                onSelect={(r) => { setRecipient(r); setErrors((e) => ({ ...e, recipient: "" })); }}
+                onSelect={(r) => { setRecipient(r); setErrors((e) => ({ ...e, recipient: "", destination: "" })); if (r.destinationCode) setDestination(r.destinationCode); if (r.subRoute) setCd(r.subRoute); }}
                 onCreate={(text) => { setMode("new"); const [f, ...l] = text.trim().split(/\s+/); setRcpt({ ...EMPTY_RCPT, firstName: f ?? "", lastName: l.join(" ") }); }} />
             )
           ) : (
@@ -374,6 +345,38 @@ export function GuideForm({ draft }: { draft?: Guide }) {
               )}
             </div>
           )}
+        </Card>
+
+        <Card className="p-5 sm:p-6">
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-base font-bold text-ink">Ruta y servicio</h3>
+            {currentSender && <span className="text-[13px] text-muted">Folio: <span className="font-mono font-semibold text-ink">{currentSender.effectiveGuidePrefix} 000000000</span></span>}
+          </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+            <Field label="Plaza de origen" error={errors.origin} hint={currentSender?.plazaCode ? `Del remitente: ${currentSender.plazaCode}` : "Ej. PBA"}>
+              <Input value={originCode} maxLength={5} placeholder="PBA" className="font-mono text-lg uppercase"
+                onChange={(e) => setOrigin(plaza(e.target.value))} />
+            </Field>
+            <span className="hidden pb-3 text-2xl text-brand-400 sm:block" aria-hidden>→</span>
+            <Field label="Plaza de destino" error={errors.destination} required hint="Ej. OAX">
+              <Input value={destination} maxLength={5} placeholder="OAX" className="font-mono text-lg uppercase"
+                onChange={(e) => setDestination(plaza(e.target.value))} />
+            </Field>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <Field label="Servicio">
+              <Select value={serviceCode} onChange={(e) => { setService(e.target.value); setCommitment(""); }}>
+                {(services.data ?? [{ code: "ORDINARIO", days: 1 }]).map((s) => <option key={s.code} value={s.code}>{s.code}</option>)}
+              </Select>
+            </Field>
+            <Field label="Fecha compromiso" hint={commitment ? "Capturada manualmente" : `Automática: ${serviceDays === 0 ? "mismo día" : `+${serviceDays} día(s)`} al confirmar`}>
+              <Input type="date" value={commitment || addDaysKey(serviceDays)} min={todayKey()}
+                onChange={(e) => setCommitment(e.target.value)} />
+            </Field>
+            <Field label="Dimensiones (cm)" hint="Largo x ancho x alto" className="col-span-2 sm:col-span-1">
+              <Input value={dimensions} placeholder="30 x 20 x 15" onChange={(e) => setDimensions(e.target.value)} />
+            </Field>
+          </div>
         </Card>
 
         <Card className="p-5 sm:p-6">
@@ -449,8 +452,8 @@ function RecipientSearch({ senderId, onSelect, onCreate, error, inputRef }: {
 
   return (
     <div>
-      <Field label="Buscar por nombre, apellido o teléfono" error={error}>
-        <Input ref={inputRef} autoFocus value={q} icon={<Search className="size-4" />} placeholder="Ej. jose perez, 5512…"
+      <Field label="Buscar cliente por nombre o número de cliente" error={error}>
+        <Input ref={inputRef} autoFocus value={q} icon={<Search className="size-4" />} placeholder="Ej. camacho, jorges, 11081…"
           onChange={(e) => { setQ(e.target.value); setActive(0); }}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(a + 1, results.length)); }
@@ -471,7 +474,7 @@ function RecipientSearch({ senderId, onSelect, onCreate, error, inputRef }: {
                 className={cn("flex w-full items-start gap-3 px-4 py-3 text-left", i === active ? "bg-brand-50" : "hover:bg-canvas")}>
                 <UserRound className="mt-0.5 size-4 text-brand-500" aria-hidden />
                 <span className="min-w-0">
-                  <span className="block font-semibold text-ink">{r.fullName} {r.phone && <span className="font-normal text-muted">· {r.phone}</span>}</span>
+                  <span className="block font-semibold text-ink">{r.clientCode && <span className="mr-1.5 font-mono text-[13px] font-normal text-muted">#{r.clientCode}</span>}{r.fullName}{r.subRoute && <span className="ml-2 rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-[12px] font-bold text-brand-700">{r.subRoute}</span>}</span>
                   <span className="block truncate text-[13px] text-muted">{joinAddress(r.address) || "Sin dirección"}</span>
                 </span>
               </button>

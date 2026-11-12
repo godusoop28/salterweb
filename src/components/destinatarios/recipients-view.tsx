@@ -54,19 +54,35 @@ export function RecipientsView() {
             {senders.data?.content.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </Select>
         )}
-        <Input className="sm:col-span-2" placeholder="Buscar por nombre, apellido, teléfono o dirección…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} aria-label="Buscar" />
+        <Input className="sm:col-span-2" placeholder="Buscar por nombre, número de cliente, subruta (CVA-01), ciudad…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} aria-label="Buscar" />
       </Card>
       <Card>
         <QueryState loading={list.isLoading} error={list.error} onRetry={() => list.refetch()}>
           {list.data?.content.length === 0 ? <EmptyState icon={Users} title="Sin destinatarios" description="Registra uno nuevo o importa tu archivo de Excel." /> : (
             <>
-              <Table head={["Nombre", "Teléfono", "Dirección", ""]}>
+              <ul className="divide-y divide-line-soft md:hidden">
+                {list.data?.content.map((r) => (
+                  <li key={r.id} className="flex items-start gap-3 p-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="flex flex-wrap items-center gap-2">
+                        {r.clientCode && <span className="font-mono text-[13px] text-muted">#{r.clientCode}</span>}
+                        {r.subRoute && <span className="rounded-lg bg-brand-50 px-2 py-0.5 font-mono text-[12px] font-bold text-brand-700">{r.subRoute}</span>}
+                      </p>
+                      <p className="mt-0.5 font-semibold text-ink">{r.fullName}</p>
+                      <p className="text-[13px] text-muted">{joinAddress(r.address) || "Sin dirección"}</p>
+                    </div>
+                    {can("RECIPIENTS_MANAGE") && <Button size="icon" variant="ghost" onClick={() => setEditing(r)} aria-label="Editar"><Pencil className="size-4" /></Button>}
+                  </li>
+                ))}
+              </ul>
+              <Table className="hidden md:block" head={["Cliente", "Nombre", "Dirección", "Subruta", ""]}>
                 {list.data?.content.map((r) => (
                   <tr key={r.id}>
-                    <td className="px-4 py-3 font-semibold text-ink">{r.fullName}</td>
-                    <td className="px-4 py-3 text-ink-soft">{r.phone ?? "—"}</td>
+                    <td className="px-4 py-3 font-mono text-[13px] text-ink-soft">{r.clientCode ?? "—"}</td>
+                    <td className="px-4 py-3 font-semibold text-ink">{r.fullName}{r.phone && <span className="block text-[13px] font-normal text-muted">{r.phone}</span>}</td>
                     <td className="px-4 py-3 text-ink-soft">{joinAddress(r.address) || "—"}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3">{r.subRoute ? <span className="whitespace-nowrap rounded-lg bg-brand-50 px-2 py-1 font-mono text-[13px] font-bold text-brand-700">{r.subRoute}</span> : "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right">
                       {can("RECIPIENTS_MANAGE") && <>
                         <Button size="sm" variant="ghost" icon={<Pencil className="size-4" />} onClick={() => setEditing(r)}>Editar</Button>
                         <Button size="sm" variant="ghost" className="text-red-600" icon={<Trash2 className="size-4" />} onClick={() => setRemoving(r)} aria-label="Dar de baja" />
@@ -95,13 +111,14 @@ function RecipientDrawer({ recipient, senderId, onClose }: { recipient: Recipien
     firstName: recipient?.firstName ?? "", lastName: recipient?.lastName ?? "", phone: recipient?.phone ?? "", email: recipient?.email ?? "",
     street: recipient?.address.street ?? "", neighborhood: recipient?.address.neighborhood ?? "", city: recipient?.address.city ?? "",
     state: recipient?.address.state ?? "", zip: recipient?.address.zip ?? "", references: recipient?.address.references ?? "", notes: recipient?.notes ?? "",
+    clientCode: recipient?.clientCode ?? "", route: recipient?.route ?? "", subRoute: recipient?.subRoute ?? "",
   });
   const [matches, setMatches] = useState<DuplicateMatch[] | null>(null);
   const [allow, setAllow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const save = useMutation({
     mutationFn: () => {
-      const body = { senderId, firstName: f.firstName, lastName: f.lastName, phone: f.phone, email: f.email || undefined, notes: f.notes,
+      const body = { senderId, firstName: f.firstName, lastName: f.lastName, phone: f.phone, email: f.email || undefined, notes: f.notes, clientCode: f.clientCode, route: f.route, subRoute: f.subRoute,
         address: { street: f.street, neighborhood: f.neighborhood, city: f.city, state: f.state, zip: f.zip, references: f.references },
         allowProbableDuplicate: allow, version: recipient?.version };
       return recipient ? api.put<Recipient>(`/recipients/${recipient.id}`, body) : api.post<Recipient>("/recipients", body);
@@ -117,7 +134,9 @@ function RecipientDrawer({ recipient, senderId, onClose }: { recipient: Recipien
     <Drawer open onClose={onClose} title={recipient ? "Editar destinatario" : "Nuevo destinatario"}
       footer={<><Button variant="outline" onClick={onClose}>Cancelar</Button><Button loading={save.isPending} disabled={!f.firstName.trim()} onClick={() => { setError(null); save.mutate(); }}>Guardar</Button></>}>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Nombre(s)" required><Input value={f.firstName} onChange={set("firstName")} autoFocus /></Field>
+        <Field label="Número de cliente"><Input value={f.clientCode} onChange={set("clientCode")} placeholder="Ej. 11081" /></Field>
+        <Field label="Subruta / Clave CD" hint="Define la plaza destino de la guía"><Input value={f.subRoute} onChange={set("subRoute")} placeholder="Ej. CVA-01" className="uppercase" /></Field>
+        <Field label="Nombre(s) / razón social" required><Input value={f.firstName} onChange={set("firstName")} autoFocus /></Field>
         <Field label="Apellidos"><Input value={f.lastName} onChange={set("lastName")} /></Field>
         <Field label="Teléfono"><Input value={f.phone} onChange={set("phone")} inputMode="tel" /></Field>
         <Field label="Correo"><Input value={f.email} onChange={set("email")} type="email" /></Field>
@@ -126,6 +145,7 @@ function RecipientDrawer({ recipient, senderId, onClose }: { recipient: Recipien
         <Field label="Ciudad"><Input value={f.city} onChange={set("city")} /></Field>
         <Field label="Estado"><Input value={f.state} onChange={set("state")} /></Field>
         <Field label="C.P."><Input value={f.zip} onChange={set("zip")} maxLength={5} inputMode="numeric" /></Field>
+        <Field label="Ruta"><Input value={f.route} onChange={set("route")} placeholder="Ej. 74" /></Field>
         <Field label="Referencias" className="sm:col-span-2"><Input value={f.references} onChange={set("references")} /></Field>
         <Field label="Notas" className="sm:col-span-2"><Textarea rows={2} value={f.notes} onChange={set("notes")} /></Field>
       </div>

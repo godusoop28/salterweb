@@ -1,5 +1,6 @@
 "use client";
 
+import { DemoRoleBar } from "@/components/layout/demo-role-bar";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -124,7 +125,7 @@ function UserMenu() {
           </div>
           <div className="my-1 border-t border-line-soft" />
           <button onClick={() => void logout()} className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50">
-            <LogOut className="size-4" aria-hidden /> {me.email.endsWith(".demo@salter.test") ? "Cambiar de rol (cerrar sesión)" : "Cerrar sesión"}
+            <LogOut className="size-4" aria-hidden /> Cerrar sesión
           </button>
         </div>
       )}
@@ -170,13 +171,16 @@ function ShellInner({ children }: { children: ReactNode }) {
       )}
 
       <div className={cn("transition-[padding] duration-200", collapsed ? "lg:pl-[84px]" : "lg:pl-[272px]")}>
-        <header className="sticky top-0 z-20 flex h-[76px] items-center gap-3 border-b border-line bg-white/85 px-4 backdrop-blur-md sm:px-6 lg:px-8">
+        <div className="sticky top-0 z-20">
+        <DemoRoleBar />
+        <header className="flex h-[76px] items-center gap-3 border-b border-line bg-white/85 px-4 backdrop-blur-md sm:px-6 lg:px-8">
           <button onClick={() => setMobileOpen(true)} className="grid size-11 place-items-center rounded-xl text-ink-soft hover:bg-canvas lg:hidden" aria-label="Abrir menú"><Menu className="size-5" /></button>
           <Link href={homeFor(me)} className="sm:hidden" aria-label="Inicio"><Logo variant="isotipo" height={32} /></Link>
           <div className="hidden flex-1 sm:block">{can("GUIDES_VIEW_ALL", "GUIDES_VIEW_OWN", "SHIPMENTS_OWN") && <QuickSearch />}</div>
           <div className="flex-1 sm:hidden" />
           <UserMenu />
         </header>
+        </div>
         <main key={pathname} className="mx-auto max-w-[1440px] animate-fade-in px-4 pt-6 pb-28 sm:px-6 lg:px-8 lg:pt-8 lg:pb-12">{children}</main>
       </div>
 

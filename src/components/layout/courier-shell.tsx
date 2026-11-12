@@ -1,5 +1,6 @@
 "use client";
 
+import { DemoRoleBar } from "@/components/layout/demo-role-bar";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
@@ -44,6 +45,7 @@ function Inner({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="relative mx-auto flex h-dvh w-full flex-col bg-canvas lg:mx-0 lg:h-[min(880px,calc(100dvh-48px))] lg:w-[420px] lg:overflow-hidden lg:rounded-[44px] lg:border-[10px] lg:border-[#0b1730] lg:shadow-[0_40px_80px_-20px_rgb(0_0_0/0.6)]">
+        <DemoRoleBar className="shrink-0" />
         <header className="z-20 flex shrink-0 items-center gap-3 border-b border-line bg-white px-4 py-3">
           <Logo variant="compacto" height={28} priority className="shrink-0" />
           <div className="ml-auto flex min-w-0 items-center gap-2">

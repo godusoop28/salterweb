@@ -14,16 +14,20 @@ import { qk } from "@/lib/api/hooks";
 import type { ImportPreview, ImportResult, ImportRow, RowStatus, ValidationResult } from "@/lib/api/types";
 
 const FIELDS: { key: keyof ImportRow | "lastName2"; label: string; required?: boolean }[] = [
-  { key: "firstName", label: "Nombre(s)", required: true },
+  { key: "clientCode", label: "Número de cliente" },
+  { key: "firstName", label: "Nombre(s) / razón social", required: true },
   { key: "lastName", label: "Apellido(s) / paterno" },
   { key: "lastName2", label: "Apellido materno (se une al anterior)" },
   { key: "phone", label: "Teléfono" },
   { key: "email", label: "Correo" },
   { key: "street", label: "Calle y número" },
+  { key: "extNumber", label: "Número exterior (se une a la calle)" },
   { key: "neighborhood", label: "Colonia" },
   { key: "city", label: "Ciudad / municipio" },
   { key: "state", label: "Estado" },
   { key: "zip", label: "Código postal" },
+  { key: "route", label: "Ruta" },
+  { key: "subRoute", label: "Subruta / Clave CD (ej. CVA-01)" },
   { key: "references", label: "Referencias" },
   { key: "notes", label: "Notas" },
 ];
@@ -41,7 +45,7 @@ export function ImportWizard({ senderId, senderName, onClose }: { senderId: numb
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [validation, setValidation] = useState<ValidationResult | null>(null);
-  const [includeProbable, setIncludeProbable] = useState(false);
+  const [includeProbable, setIncludeProbable] = useState(true);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,7 +61,8 @@ export function ImportWizard({ senderId, senderName, onClose }: { senderId: numb
       const get = (k: string) => (mapping[k] ? (r[mapping[k]] ?? "").trim() : "");
       const last = [get("lastName"), get("lastName2")].filter(Boolean).join(" ");
       return { rowNumber: i + 2, firstName: get("firstName"), lastName: last, phone: get("phone"), email: get("email"), street: get("street"),
-        neighborhood: get("neighborhood"), city: get("city"), state: get("state"), zip: get("zip"), references: get("references"), notes: get("notes") };
+        neighborhood: get("neighborhood"), city: get("city"), state: get("state"), zip: get("zip"), references: get("references"), notes: get("notes"),
+        clientCode: get("clientCode"), extNumber: get("extNumber"), route: get("route"), subRoute: get("subRoute") };
     });
   }, [preview, mapping]);
 
@@ -110,8 +115,8 @@ export function ImportWizard({ senderId, senderName, onClose }: { senderId: numb
             </div>
             <div className="overflow-x-auto rounded-2xl border border-line">
               <table className="w-full text-[13px]">
-                <thead className="bg-canvas"><tr>{["Fila", "Nombre", "Apellidos", "Teléfono", "Calle", "Ciudad", "C.P."].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr></thead>
-                <tbody>{rows.slice(0, 5).map((r) => <tr key={r.rowNumber} className="border-t border-line-soft"><td className="px-3 py-1.5">{r.rowNumber}</td><td className="px-3">{r.firstName}</td><td className="px-3">{r.lastName}</td><td className="px-3">{r.phone}</td><td className="px-3">{r.street}</td><td className="px-3">{r.city}</td><td className="px-3">{r.zip}</td></tr>)}</tbody>
+                <thead className="bg-canvas"><tr>{["Fila", "# Cliente", "Nombre", "Calle", "Ciudad", "C.P.", "Subruta"].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr></thead>
+                <tbody>{rows.slice(0, 5).map((r) => <tr key={r.rowNumber} className="border-t border-line-soft"><td className="px-3 py-1.5">{r.rowNumber}</td><td className="px-3">{r.clientCode}</td><td className="px-3">{[r.firstName, r.lastName].filter(Boolean).join(" ")}</td><td className="px-3">{[r.street, r.extNumber].filter(Boolean).join(" ")}</td><td className="px-3">{r.city}</td><td className="px-3">{r.zip}</td><td className="px-3">{r.subRoute}</td></tr>)}</tbody>
               </table>
             </div>
           </>
@@ -125,7 +130,7 @@ export function ImportWizard({ senderId, senderName, onClose }: { senderId: numb
               <Badge tone="red">{validation.errors} con error</Badge>
             </div>
             {validation.probableDuplicates > 0 && (
-              <label className="flex items-center gap-2 text-sm font-semibold text-ink"><input type="checkbox" checked={includeProbable} onChange={(e) => setIncludeProbable(e.target.checked)} /> Importar también los posibles duplicados (personas distintas con datos parecidos)</label>
+              <label className="flex items-center gap-2 text-sm font-semibold text-ink"><input type="checkbox" checked={includeProbable} onChange={(e) => setIncludeProbable(e.target.checked)} /> Importar también los posibles duplicados (por ejemplo, el mismo cliente con otra sucursal o dirección)</label>
             )}
             <div className="max-h-[45vh] overflow-auto rounded-2xl border border-line">
               <table className="w-full text-[13px]">
