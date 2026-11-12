@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  ChartColumn, ChevronsLeft, ChevronsRight, ClipboardList, FilePlus2, LayoutDashboard, LogOut, Menu, MoreHorizontal,
+  ChartColumn, ChevronsLeft, ChevronsRight, ClipboardList, FilePlus2, FileSpreadsheet, LayoutDashboard, LogOut, Menu, MoreHorizontal,
   Package, Search, Settings, Store, Truck, TriangleAlert, UserCog, Users, Warehouse, X, type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/components/branding/logo";
@@ -22,6 +22,7 @@ function useNav(): { operation: NavItem[]; admin: NavItem[] } {
   const operation: NavItem[] = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, perms: ["DASHBOARD_VIEW"], mobile: true },
     { href: "/guias/nueva", label: "Nueva guía", icon: FilePlus2, perms: ["GUIDES_CREATE"], mobile: true },
+    { href: "/guias/importar", label: "Guías desde archivo", icon: FileSpreadsheet, perms: ["GUIDES_CREATE"] },
     { href: "/guias", label: guidesLabel, icon: Package, perms: ["GUIDES_VIEW_ALL", "GUIDES_VIEW_OWN", "SHIPMENTS_OWN"], mobile: true },
     { href: "/destinatarios", label: "Destinatarios", icon: Users, perms: ["RECIPIENTS_VIEW"] },
     { href: "/manifiestos", label: "Manifiestos y salidas", icon: ClipboardList, perms: ["MANIFESTS_VIEW", "MANIFESTS_MANAGE", "DISPATCH_AUTHORIZE"], mobile: true },
