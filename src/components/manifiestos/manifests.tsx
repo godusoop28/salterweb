@@ -32,10 +32,10 @@ export function ManifestsList() {
         actions={can("MANIFESTS_MANAGE") && <ButtonLink href="/manifiestos/nuevo" icon={<Plus className="size-4" />}>Nuevo manifiesto</ButtonLink>} />
       <Card className="mb-4 grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
         <Select className="col-span-2 sm:col-span-1" value={status} onChange={(e) => { setStatus(e.target.value as ManifestStatus); setPage(1); }} aria-label="Estado">
-          <option value="">Todos los estados</option><option value="BORRADOR">Borrador</option><option value="CERRADO">Cerrado</option><option value="DESPACHADO">Despachado</option>
+          <option value="">Estado (todos)</option><option value="BORRADOR">Borrador</option><option value="CERRADO">Cerrado</option><option value="DESPACHADO">Despachado</option>
         </Select>
-        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Desde" />
-        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="Hasta" />
+        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="Desde" title="Desde" />
+        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} aria-label="Hasta" title="Hasta" />
       </Card>
       <Card>
         <QueryState loading={q.isLoading} error={q.error} onRetry={() => q.refetch()}>

@@ -32,7 +32,7 @@ export function IncidentsView() {
       <PageHeader title="Incidencias" description="Seguimiento y resolución. Al resolver, la guía vuelve a su estado previo, se retiene o se cancela." />
       <Card className="mb-4 grid gap-3 p-4 sm:grid-cols-3">
         <Select value={status} onChange={(e) => { setStatus(e.target.value as IncidentStatus); setPage(1); }} aria-label="Estado">
-          <option value="">Todas</option><option value="ABIERTA">Abiertas</option><option value="EN_REVISION">En revisión</option><option value="RESUELTA">Resueltas</option>
+          <option value="">Estado (todas)</option><option value="ABIERTA">Abiertas</option><option value="EN_REVISION">En revisión</option><option value="RESUELTA">Resueltas</option>
         </Select>
         <Input className="sm:col-span-2" placeholder="Folio de incidencia o de guía" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} aria-label="Buscar" />
       </Card>

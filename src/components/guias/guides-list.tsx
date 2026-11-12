@@ -46,22 +46,22 @@ export function GuidesList() {
       <Card className="mb-4 grid grid-cols-2 gap-3 p-4 lg:grid-cols-6">
         <Input className="col-span-2" placeholder="Folio, destinatario, ciudad, referencia…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} aria-label="Buscar" />
         <Select value={status} onChange={(e) => { setStatus(e.target.value as GuideStatus); setPage(1); }} aria-label="Estado">
-          <option value="">Todos los estados</option>
+          <option value="">Estado (todos)</option>
           {GUIDE_STATUS_ORDER.map((s) => <option key={s} value={s}>{GUIDE_STATUS[s].label}</option>)}
         </Select>
         {all ? (
           <Select value={senderId} onChange={(e) => { setSenderId(e.target.value); setPage(1); }} aria-label="Remitente">
-            <option value="">Todos los remitentes</option>
+            <option value="">Remitente (todos)</option>
             {senders.data?.content.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </Select>
         ) : (
           <Select value={shiftId} onChange={(e) => { setShiftId(e.target.value); setPage(1); }} aria-label="Turno">
-            <option value="">Todos los turnos</option>
+            <option value="">Turno (todos)</option>
             {shifts.data?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </Select>
         )}
-        <Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} aria-label="Desde" />
-        <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} aria-label="Hasta" />
+        <Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} aria-label="Desde" title="Desde" />
+        <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} aria-label="Hasta" title="Hasta" />
       </Card>
       <Card>
         <QueryState loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}>
