@@ -431,7 +431,7 @@ export function GuideForm({ draft }: { draft?: Guide }) {
             icon={<Save className="size-5" />} onClick={() => submit(false)}>
             Guardar borrador
           </Button>
-          {!can("GUIDES_CONFIRM") && <p className="text-[13px] text-muted">Tu usuario no confirma guías: un supervisor las revisará y confirmará.</p>}
+          {!can("GUIDES_CONFIRM") && <p className="text-[13px] text-muted">Tu usuario no confirma guías: el administrador las revisará y confirmará.</p>}
           <p className="flex items-center gap-1.5 text-[12px] text-subtle"><Keyboard className="size-3.5" /> Ctrl + Enter para {can("GUIDES_CONFIRM") ? "confirmar" : "guardar"}</p>
           {draft && <Link href={`/guias/${draft.id}`} className="block text-center text-sm font-semibold text-brand-600">Cancelar edición</Link>}
         </Card>

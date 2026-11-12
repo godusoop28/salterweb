@@ -91,7 +91,7 @@ export function LoginView() {
   );
 }
 
-const ROLE_LABEL: Record<string, string> = { CAPTURISTA: "Capturista", SUPERVISOR: "Supervisor", RECEPCION: "Recepción", REPARTIDOR: "Repartidor", REMITENTE: "Cliente ATM", ADMIN: "Administrador" };
+const ROLE_LABEL: Record<string, string> = { REMITENTE: "Remitente", ADMIN: "Administrador", RECEPCION: "Receptor", REPARTIDOR: "Repartidor" };
 
 type DemoInfo = { enabled: boolean; roles: { code: string; name: string; description: string }[] };
 

@@ -92,7 +92,7 @@ export function homeFor(me: Pick<Me, "role" | "permissions">): string {
   const role: RoleCode = me.role;
   if (role === "REPARTIDOR" || (p.has("DELIVERIES_OWN") && !p.has("GUIDES_VIEW_ALL"))) return "/entregas";
   if (p.has("DASHBOARD_VIEW")) return "/dashboard";
-  if (role === "CAPTURISTA" || p.has("GUIDES_CREATE")) return "/guias/nueva";
+  if (role === "REMITENTE" || p.has("GUIDES_CREATE")) return "/guias/nueva";
   if (p.has("RECEPTION_CONFIRM")) return "/recepcion";
   return "/guias";
 }

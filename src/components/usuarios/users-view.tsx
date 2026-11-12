@@ -84,7 +84,7 @@ function UserDrawer({ user, roles, onClose }: { user: UserAccount | null; roles:
   const couriers = useCouriers(true);
   const catalog = usePermissionCatalog();
   const [f, setF] = useState({
-    email: user?.email ?? "", fullName: user?.fullName ?? "", phone: user?.phone ?? "", role: (user?.role ?? "CAPTURISTA") as RoleCode,
+    email: user?.email ?? "", fullName: user?.fullName ?? "", phone: user?.phone ?? "", role: (user?.role ?? "REMITENTE") as RoleCode,
     password: "", senderId: user?.sender ? String(user.sender.id) : "", courierId: user?.courier ? String(user.courier.id) : "", active: user?.active ?? true,
   });
   const [granted, setGranted] = useState<Set<Permission>>(new Set(user?.grantedPermissions ?? []));
@@ -122,7 +122,7 @@ function UserDrawer({ user, roles, onClose }: { user: UserAccount | null; roles:
         <Field label="Teléfono"><Input value={f.phone} onChange={set("phone")} /></Field>
         <Field label="Rol" required><Select value={f.role} onChange={(e) => { setF({ ...f, role: e.target.value as RoleCode }); setGranted(new Set()); setRevoked(new Set()); }}>{roles.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}</Select></Field>
         {!user && <Field label="Contraseña inicial" hint="10+ caracteres con letras y números" required><Input type="password" value={f.password} onChange={set("password")} autoComplete="new-password" /></Field>}
-        <Field label="Remitente asignado" hint={f.role === "CAPTURISTA" ? "Remitente por defecto del capturista" : f.role === "REMITENTE" ? "Obligatorio: sólo verá sus envíos" : "Opcional"}>
+        <Field label="Remitente asignado" required={f.role === "REMITENTE"} hint={f.role === "REMITENTE" ? "Obligatorio: sólo verá y elaborará guías de este remitente" : "Opcional"}>
           <Select value={f.senderId} onChange={set("senderId")}><option value="">Ninguno</option>{senders.data?.content.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>
         </Field>
         {(f.role === "REPARTIDOR" || f.courierId) && (
@@ -132,7 +132,7 @@ function UserDrawer({ user, roles, onClose }: { user: UserAccount | null; roles:
       </div>
       <div className="mt-6">
         <h4 className="mb-1 flex items-center gap-2 font-bold text-ink"><ShieldCheck className="size-4 text-brand-600" /> Permisos efectivos</h4>
-        <p className="mb-3 text-[13px] text-muted">Marcados por el rol «{roleInfo?.name}». Puedes conceder o retirar permisos sólo a este usuario (p. ej. permitir que un capturista confirme guías o importe destinatarios).</p>
+        <p className="mb-3 text-[13px] text-muted">Marcados por el rol «{roleInfo?.name}». Puedes conceder o retirar permisos sólo a este usuario (p. ej. retirar a un remitente la confirmación de guías o la importación de destinatarios).</p>
         <div className="grid gap-1.5 sm:grid-cols-2">
           {catalog.data?.map((p) => (
             <label key={p.code} className="flex items-start gap-2 rounded-xl px-2 py-1.5 text-sm hover:bg-canvas">

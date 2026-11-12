@@ -12,12 +12,10 @@ import { cn } from "@/lib/utils";
 
 /** Roles del acceso de pruebas, en el orden del flujo operativo. */
 const ROLES = [
-  { code: "CAPTURISTA", label: "Capturista" },
-  { code: "SUPERVISOR", label: "Supervisor" },
-  { code: "RECEPCION", label: "Recepción" },
-  { code: "REPARTIDOR", label: "Repartidor" },
-  { code: "REMITENTE", label: "Cliente ATM" },
+  { code: "REMITENTE", label: "Remitente" },
   { code: "ADMIN", label: "Admin" },
+  { code: "RECEPCION", label: "Receptor" },
+  { code: "REPARTIDOR", label: "Repartidor" },
 ] as const;
 
 export const DEMO_EMAIL_SUFFIX = ".demo@salter.test";

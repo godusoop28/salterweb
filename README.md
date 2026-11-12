@@ -28,20 +28,20 @@ Navegador ──► https://frontend/api/*  ──(rewrite de Next.js)──► 
 
 ## Pantallas y navegación por rol
 
-El menú se construye con los **permisos** que devuelve la API; no se muestran opciones sin acceso.
+Hay sólo **4 roles**: **Administrador** (administrador general), **Remitente** (elabora sus guías y consulta sus envíos), **Receptor** (confirma la llegada a destino) y **Repartidor** (entrega). El menú se construye con los **permisos** que devuelve la API; no se muestran opciones sin acceso.
 
 | Ruta | Módulo | Quién la ve (por defecto) |
 |---|---|---|
 | `/login` | Inicio de sesión real | Todos |
-| `/dashboard` | Indicadores del backend | Administrador, Supervisor |
-| `/guias/nueva` | Captura rápida de guías (teclado, alta inline, duplicados, borrador/confirmación) | Capturista, Supervisor, Admin |
+| `/dashboard` | Indicadores del backend | Admin |
+| `/guias/nueva` | Captura rápida de guías (teclado, alta inline, duplicados, borrador/confirmación) | Remitente, Admin |
 | `/guias`, `/guias/[id]` | Guías / mis guías / mis envíos, detalle, historial, acciones y PDF | Según alcance |
-| `/destinatarios` | Catálogo, búsqueda sin acentos, importación Excel/CSV con correspondencia de columnas | Capturista, Supervisor, Admin |
-| `/manifiestos` | Elaboración, cierre, reapertura y **autorización de salida** | Supervisor, Admin |
-| `/recepcion` | Recepción por folio (compatible con lector de códigos) | Recepción, Supervisor, Admin |
-| `/repartidores` | Repartidores y asignación de guías | Supervisor, Admin |
-| `/incidencias` | Seguimiento y resolución | Supervisor, Admin (otros: las propias) |
-| `/reportes` | Filtros y exportación CSV / Excel / PDF | Supervisor, Admin, Remitente (propios) |
+| `/destinatarios` | Catálogo, búsqueda sin acentos, importación Excel/CSV con correspondencia de columnas | Remitente (los suyos), Admin |
+| `/manifiestos` | Elaboración, cierre, reapertura y **autorización de salida** | Admin |
+| `/recepcion` | Recepción por folio (compatible con lector de códigos) | Receptor, Admin |
+| `/repartidores` | Repartidores y asignación de guías | Admin |
+| `/incidencias` | Seguimiento y resolución | Admin (otros: las propias) |
+| `/reportes` | Filtros y exportación CSV / Excel / PDF | Admin, Remitente (propios) |
 | `/usuarios` | Usuarios, roles, permisos por rol y por usuario | Admin |
 | `/remitentes`, `/configuracion` | Catálogos, turnos, conceptos, reglas provisionales | Admin |
 | `/entregas`, `/historial` | App móvil del repartidor (sólo sus asignaciones) | Repartidor |

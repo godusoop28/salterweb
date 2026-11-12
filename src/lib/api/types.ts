@@ -12,7 +12,7 @@ export type Permission =
   | "DELIVERIES_ANY" | "RECEPTION_CONFIRM" | "INCIDENTS_VIEW" | "INCIDENTS_CREATE" | "INCIDENTS_RESOLVE"
   | "REPORTS_VIEW" | "REPORTS_OWN" | "SHIPMENTS_OWN";
 
-export type RoleCode = "ADMIN" | "SUPERVISOR" | "CAPTURISTA" | "REPARTIDOR" | "RECEPCION" | "REMITENTE";
+export type RoleCode = "ADMIN" | "REMITENTE" | "RECEPCION" | "REPARTIDOR";
 
 export interface Ref { id: number; name: string }
 

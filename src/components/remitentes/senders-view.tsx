@@ -23,7 +23,7 @@ export function SendersView() {
   const [editing, setEditing] = useState<Sender | "new" | null>(null);
   return (
     <>
-      <PageHeader title="Remitentes" description="Clientes empresariales y particulares. Los capturistas trabajan con el remitente que tienen asignado."
+      <PageHeader title="Remitentes" description="Clientes empresariales y particulares. Cada usuario remitente trabaja sólo con el remitente que tiene asignado."
         actions={<Button icon={<Plus className="size-4" />} onClick={() => setEditing("new")}>Nuevo remitente</Button>} />
       <Card className="mb-4 p-4"><Input placeholder="Buscar por nombre o clave" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar" /></Card>
       <Card>
