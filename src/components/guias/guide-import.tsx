@@ -16,7 +16,7 @@ import { useInvalidateOperation, useSenders, useShippingRoutes } from "@/lib/api
 import type { Address, Recipient } from "@/lib/api/types";
 import { printedFolio } from "@/lib/format";
 import { useSession } from "@/lib/session";
-import { cn } from "@/lib/utils";
+import { cn, routeForClient } from "@/lib/utils";
 
 interface PackageLine { lpn?: string; type: string; order?: string }
 interface ImportGroup {
@@ -119,7 +119,9 @@ export function GuideImport() {
   const filePieces = groups.reduce((s, g) => s + piecesOf(rows[g.requestId]), 0);
   const declared = preview?.declaredPackages;
   const defaultRouteId = preview?.defaultShippingRouteId;
-  const routeId = routeOverride?.id ?? defaultRouteId;
+  // Sin predeterminada, cada guía toma la ruta de embarque de la RUTA del cliente (la del archivo, ej. 74).
+  const fileRoute = !defaultRouteId ? routeForClient(routes.data, preview?.route) : undefined;
+  const routeId = routeOverride?.id ?? defaultRouteId ?? fileRoute?.id;
   const routeChanged = !!routeOverride && !!defaultRouteId && routeOverride.id !== defaultRouteId;
   const routeLabel = routes.data?.find((r) => r.id === routeId);
   const totalOrders = useMemo(() => selected.reduce((s, g) => s + rows[g.requestId].orders.split(/[^A-Za-z0-9-]+/).filter((o) => o.length >= 3).length, 0), [selected, rows]);
@@ -200,7 +202,7 @@ export function GuideImport() {
             <div className="flex flex-wrap items-end gap-3 border-t border-line-soft pt-4 text-sm">
               <div>
                 <p className="font-semibold text-ink">Ruta de embarque</p>
-                <p className="text-muted">{routeLabel ? `${routeLabel.code} · ${routeLabel.name}${routeChanged ? " (cambiada)" : " (predeterminada)"}` : "El remitente no tiene ruta predeterminada"}</p>
+                <p className="text-muted">{routeLabel ? `${routeLabel.code} · ${routeLabel.name}${routeChanged ? " (cambiada)" : routeOverride ? "" : defaultRouteId ? " (predeterminada)" : ` (ruta ${preview?.route} del archivo)`}` : "Sin ruta de embarque: se asignará después"}</p>
               </div>
               {canReroute && !locked && (
                 <>

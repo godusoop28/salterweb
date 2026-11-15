@@ -24,7 +24,7 @@ import type { Address, DuplicateMatch, Guide, GuideRequest, Recipient } from "@/
 import { joinAddress, printedFolio, todayKey, uuid } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { useDebounced } from "@/hooks/use-debounced";
-import { cn } from "@/lib/utils";
+import { cn, routeForClient } from "@/lib/utils";
 
 interface NewRcpt { firstName: string; lastName: string; phone: string; email: string; street: string; neighborhood: string; city: string; state: string; zip: string; references: string }
 /** Renglón del carrito de bultos. La cantidad inicia VACÍA: nunca se asume 1. */
@@ -130,7 +130,9 @@ export function GuideForm({ draft }: { draft?: Guide }) {
   const senderId = chosenSender ?? me?.sender?.id ?? (restricted ? undefined : defaultSender);
   const currentSender = senders.data?.content.find((s) => s.id === senderId);
   const defaultRoute = currentSender?.defaultShippingRoute;
-  const routeId = routeOverride?.id ?? defaultRoute?.id;
+  // Sin predeterminada, el backend asigna la ruta de embarque con la RUTA del cliente (ej. 74).
+  const clientRoute = !defaultRoute ? routeForClient(routes.data, recipient?.route) : undefined;
+  const routeId = routeOverride?.id ?? defaultRoute?.id ?? clientRoute?.id;
   const routeName = routes.data?.find((r) => r.id === routeId);
   const routeChanged = !!routeOverride && !!defaultRoute && routeOverride.id !== defaultRoute.id;
   const originCode = origin ?? currentSender?.plazaCode ?? "";
@@ -417,6 +419,7 @@ export function GuideForm({ draft }: { draft?: Guide }) {
               : <Badge tone="slate">Sin ruta asignada</Badge>}
           </div>
           {defaultRoute && <p className="text-[13px] text-muted">Predeterminada del remitente: <b className="text-ink">{defaultRoute.name}</b></p>}
+          {!defaultRoute && !routeOverride && clientRoute && <p className="text-[13px] text-muted">Asignada por la ruta del cliente: <b className="text-ink">{clientRoute.code}</b></p>}
           {canReroute ? (
             <div className="flex flex-wrap items-end gap-3">
               <Field label="Cambiar ruta" className="min-w-56 flex-1" error={errors.route}>

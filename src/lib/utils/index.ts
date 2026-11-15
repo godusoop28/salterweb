@@ -35,3 +35,14 @@ export function compressImage(file: File, maxSize = 640): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+/**
+ * Ruta de embarque que el backend asigna sola cuando el remitente no tiene predeterminada:
+ * la activa cuya clave es la RUTA del cliente (ej. «74», «074» o «74.0» → 74).
+ */
+export function routeForClient<T extends { code: string; active: boolean }>(routes: T[] | undefined, clientRoute?: string | null): T | undefined {
+  let code = clientRoute?.trim();
+  if (!code || !routes) return undefined;
+  if (/^\d{1,15}(\.0+)?$/.test(code)) code = String(Number.parseInt(code, 10));
+  return routes.find((r) => r.active && r.code.toUpperCase() === code!.toUpperCase());
+}
