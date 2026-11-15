@@ -66,6 +66,15 @@ export function MovementTimeline({ movements }: { movements: Movement[] }) {
             </p>
             {m.fromStatus !== m.toStatus && <p className="text-[13px] text-subtle">Estado: {meta?.label ?? m.toStatus}</p>}
             {m.notes && <p className="mt-1 rounded-lg bg-canvas px-2.5 py-1.5 text-sm text-ink-soft">{m.notes}</p>}
+            {m.metadata && m.type === "CAMBIO_RUTA" && (
+              <p className="mt-1 text-[13px] text-muted">
+                <strong>Ruta:</strong> {String(m.metadata.rutaAnterior ?? "—")} → {String(m.metadata.rutaNueva ?? "—")}
+                {m.metadata.manifiestoNuevo ? ` · manifiesto ${String(m.metadata.manifiestoNuevo)}` : ""}
+              </p>
+            )}
+            {m.metadata && ["MANIFIESTO_ASIGNADO", "MANIFIESTO_RETIRADA", "NO_VIAJA", "VIAJA", "MANIFIESTO", "DESPACHO"].includes(m.type) && !!m.metadata.manifest && (
+              <p className="mt-1 text-[13px] text-muted">Manifiesto {String(m.metadata.manifest)}{m.metadata.route ? ` · ruta ${String(m.metadata.route)}` : ""}</p>
+            )}
             {m.metadata && m.type === "CORRECCION" && (
               <ul className="mt-1 space-y-0.5 text-[13px] text-muted">
                 {Object.entries(m.metadata).map(([k, v]) => {

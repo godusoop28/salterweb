@@ -2,19 +2,24 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
-  ChevronDown, CircleCheck, FilePlus2, FileText, Keyboard, Save, Search, UserPlus, UserRound, X,
+  ChevronDown, CircleCheck, ClipboardCheck, FilePlus2, PackagePlus, Route, Save, Search, Trash2, UserPlus, UserRound, X,
 } from "lucide-react";
 import { InlineError } from "@/components/app/common";
 import { RecipientEditor } from "@/components/destinatarios/recipient-editor";
+import { GuidePrintButtons } from "@/components/guias/guide-print";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
+import { Modal } from "@/components/ui/overlay";
 import { Card } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/toast";
-import { ApiError, api, downloadFile, errorMessage } from "@/lib/api/client";
-import { useConcepts, useGuideServices, useInvalidateOperation, useRecipients, useSenders, useShifts } from "@/lib/api/hooks";
+import { ApiError, api, errorMessage } from "@/lib/api/client";
+import {
+  useConcepts, useGuideServices, useInvalidateOperation, useRecipients, useSenders, useShifts, useShippingRoutes,
+} from "@/lib/api/hooks";
 import type { Address, DuplicateMatch, Guide, GuideRequest, Recipient } from "@/lib/api/types";
 import { joinAddress, printedFolio, todayKey, uuid } from "@/lib/format";
 import { useSession } from "@/lib/session";
@@ -22,23 +27,23 @@ import { useDebounced } from "@/hooks/use-debounced";
 import { cn } from "@/lib/utils";
 
 interface NewRcpt { firstName: string; lastName: string; phone: string; email: string; street: string; neighborhood: string; city: string; state: string; zip: string; references: string }
-/** Tipo de bulto seleccionado y su cantidad (la cantidad por tipo sólo se pide cuando hay varios). */
-interface Pack { name: string; qty: string }
+/** Renglón del carrito de bultos. La cantidad inicia VACÍA: nunca se asume 1. */
+export interface CartLine { key: string; type: string; qty: string; detail: string; weight: string }
 
 const EMPTY_RCPT: NewRcpt = { firstName: "", lastName: "", phone: "", email: "", street: "", neighborhood: "", city: "", state: "", zip: "", references: "" };
 const SENDER_KEY = "salter.guia.remitente";
-/** Tipos de bulto que maneja el cliente, en el orden en que los pidió. */
-const PACK_TYPES = ["Caja", "Sobre", "Acumulador", "Tambo", "Tarima"];
-const DEFAULT_PACKS: Pack[] = [{ name: "Caja", qty: "1" }];
+/** Tipos de bulto que maneja el cliente; se completan con los conceptos activos del catálogo. */
+export const PACK_TYPES = ["Caja", "Sobre", "Atado", "Acumulador", "Tambo", "Tarima"];
 
 const plaza = (v: string) => v.replace(/[^a-zA-Z]/g, "").slice(0, 5).toUpperCase();
-const sameName = (a: string, b: string) => a.trim().localeCompare(b.trim(), "es", { sensitivity: "base" }) === 0;
+export const sameName = (a: string, b: string) => a.trim().localeCompare(b.trim(), "es", { sensitivity: "base" }) === 0;
+export const qtyOf = (l: CartLine) => (/^\d+$/.test(l.qty) ? Number(l.qty) : 0);
+export const piecesLabel = (n: number) => `${n} ${n === 1 ? "pieza" : "piezas"}`;
 
 /** Fecha (YYYY-MM-DD) sumando días a hoy en la zona horaria del negocio. */
 function addDaysKey(days: number): string {
   const [y, m, d] = todayKey().split("-").map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d + days));
-  return dt.toISOString().slice(0, 10);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
 function rcptFromDraft(draft: Guide): NewRcpt {
@@ -48,19 +53,30 @@ function rcptFromDraft(draft: Guide): NewRcpt {
     street: a.street ?? "", neighborhood: a.neighborhood ?? "", city: a.city ?? "", state: a.state ?? "", zip: a.zip ?? "", references: a.references ?? "" };
 }
 
-/** Captura rápida de guías (alta y edición de borradores): cliente → pedido(s) → bultos → tipo de bulto. */
+export function cartFromDraft(draft?: Guide): CartLine[] {
+  if (!draft?.items.length) return [];
+  return draft.items.map((i) => ({ key: uuid(), type: i.description, qty: String(Math.trunc(i.quantity)), detail: i.detail ?? "",
+    weight: i.weightKg != null ? String(i.weightKg) : "" }));
+}
+
+/**
+ * Captura de guías: cliente → pedido(s) → carrito de bultos → revisión → confirmación explícita.
+ * Enter NUNCA confirma: el folio sólo se genera con el botón «Confirmar y generar folio» de la pantalla de revisión.
+ */
 export function GuideForm({ draft }: { draft?: Guide }) {
   const { me, can } = useSession();
   const router = useRouter();
   const toast = useToast();
   const invalidate = useInvalidateOperation();
   const restricted = !can("SENDERS_VIEW");
-  // El remitente sale del registro del usuario; sólo se elige cuando el usuario no tiene uno asignado (punto de venta / administración).
   const pickSender = !restricted && !me?.sender;
   const senders = useSenders({ active: true });
   const shifts = useShifts();
   const concepts = useConcepts();
   const services = useGuideServices();
+  const routes = useShippingRoutes(true);
+  const canConfirm = can("GUIDES_CONFIRM");
+  const canReroute = can("ROUTES_REASSIGN");
 
   const [chosenSender, setSenderId] = useState<number | undefined>(draft?.senderId);
   const [chosenShift, setShiftId] = useState<string | null>(draft ? (draft.shift ? String(draft.shift.id) : "") : null);
@@ -72,39 +88,39 @@ export function GuideForm({ draft }: { draft?: Guide }) {
   });
   const [chosenRecipient, setRecipient] = useState<Recipient | null | undefined>(undefined);
   const recipient = chosenRecipient === undefined ? (draftRecipient.data ?? null) : chosenRecipient;
-  // "new": destinatario capturado sólo para una guía (borradores anteriores). Las guías nuevas usan el catálogo.
   const [mode, setMode] = useState<"search" | "new">(draft && draft.recipientOneTime ? "new" : "search");
   const [rcpt, setRcpt] = useState<NewRcpt>(() => (draft && (draft.recipientOneTime || !draft.recipientId) ? rcptFromDraft(draft) : EMPTY_RCPT));
   const [adding, setAdding] = useState<string | null>(null);
   const [allowProbable, setAllowProbable] = useState(false);
   const [matches, setMatches] = useState<DuplicateMatch[] | null>(null);
-  // Pedido repetido: guías vigentes que ya lo tienen; el usuario decide si es otro envío.
   const [dupOrder, setDupOrder] = useState<{ message: string; guides: { id: number; reference: string; recipient: string; status: string }[] } | null>(null);
   const [allowDupOrder, setAllowDupOrder] = useState(false);
   const [cd, setCd] = useState(draft?.cdReference ?? "");
+  const [subRoute, setSubRoute] = useState(draft?.subRoute ?? "");
   const [order, setOrder] = useState(draft?.orderReference ?? "");
-  const [packages, setPackages] = useState(String(draft?.packageCount ?? 1));
-  const [packs, setPacks] = useState<Pack[]>(() =>
-    draft?.items.length ? draft.items.map((i) => ({ name: i.description, qty: String(i.quantity) })) : DEFAULT_PACKS);
-  const [weight, setWeight] = useState(() => {
-    const w = draft?.items.reduce((sum, i) => sum + (i.weightKg ?? 0), 0) ?? 0;
-    return w > 0 ? String(w) : "";
-  });
+  const [cart, setCart] = useState<CartLine[]>(() => cartFromDraft(draft));
+  const [weightNA, setWeightNA] = useState(draft?.shipping?.weightNotApplicable ?? false);
+  const [dimsNA, setDimsNA] = useState(draft?.shipping?.dimensionsNotApplicable ?? false);
   const [notes, setNotes] = useState(draft?.notes ?? "");
   const [moreOpen, setMoreOpen] = useState(false);
-  // Formato oficial de guía: PBA → OAX, dimensiones, servicio y fecha compromiso
   const [origin, setOrigin] = useState<string | null>(draft?.shipping?.originCode ?? null);
   const [destination, setDestination] = useState(draft?.shipping?.destinationCode ?? "");
   const [dimensions, setDimensions] = useState(draft?.shipping?.dimensions ?? "");
   const [service, setService] = useState(draft?.shipping?.serviceType ?? "");
   const [commitment, setCommitment] = useState(draft?.shipping?.commitmentDate ?? "");
+  // Ruta de embarque: la predeterminada del remitente salvo cambio autorizado y con motivo.
+  const [routeOverride, setRouteOverride] = useState<{ id: number; reason: string } | null>(
+    draft?.shippingRoute ? { id: draft.shippingRoute.id, reason: "" } : null);
+  const [routeDialog, setRouteDialog] = useState<{ id: number; reason: string } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [verified, setVerified] = useState(false);
   const [done, setDone] = useState<Guide | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const orderRef = useRef<HTMLInputElement>(null);
+  const qtyRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  // Remitente por defecto: el asignado al usuario o, en punto de venta, el último usado (preferencia local de interfaz).
   const defaultSender = useMemo(() => {
     const list = senders.data?.content ?? [];
     if (!list.length) return undefined;
@@ -113,17 +129,25 @@ export function GuideForm({ draft }: { draft?: Guide }) {
   }, [senders.data]);
   const senderId = chosenSender ?? me?.sender?.id ?? (restricted ? undefined : defaultSender);
   const currentSender = senders.data?.content.find((s) => s.id === senderId);
-  // Plaza de origen: la capturada o la del remitente
+  const defaultRoute = currentSender?.defaultShippingRoute;
+  const routeId = routeOverride?.id ?? defaultRoute?.id;
+  const routeName = routes.data?.find((r) => r.id === routeId);
+  const routeChanged = !!routeOverride && !!defaultRoute && routeOverride.id !== defaultRoute.id;
   const originCode = origin ?? currentSender?.plazaCode ?? "";
   const serviceCode = service || services.data?.[0]?.code || "ORDINARIO";
   const serviceDays = services.data?.find((s) => s.code === serviceCode)?.days ?? 1;
-  // Turno actual por defecto.
   const shiftId = chosenShift ?? String(shifts.data?.find((x) => x.current)?.id ?? "");
-  // Con varios tipos de bulto, el total de bultos es la suma de cada tipo.
-  const several = packs.length > 1;
-  const totalPackages = several ? packs.reduce((sum, p) => sum + (Number(p.qty) || 0), 0) : Number(packages) || 0;
-  const packTypes = [...PACK_TYPES, ...packs.map((p) => p.name).filter((n) => !PACK_TYPES.some((t) => sameName(t, n)))];
+  const packTypes = useMemo(() => {
+    const fromCatalog = (concepts.data ?? []).filter((c) => c.active).map((c) => c.name);
+    const all = [...PACK_TYPES];
+    for (const n of [...fromCatalog, ...cart.map((l) => l.type)]) if (n && !all.some((t) => sameName(t, n))) all.push(n);
+    return all;
+  }, [concepts.data, cart]);
   const conceptFor = (name: string) => concepts.data?.find((c) => c.active && sameName(c.name, name));
+  // Totales: piezas = suma de cantidades; partidas = renglones con tipo. Nunca se mezclan con pedidos ni guías.
+  const pieces = cart.reduce((s, l) => s + qtyOf(l), 0);
+  const orders = order.split(/[^A-Za-z0-9-]+/).filter((o) => o.length >= 3);
+  const totalWeight = weightNA ? null : cart.reduce((s, l) => s + (Number(l.weight) || 0), 0);
 
   const mutation = useMutation({
     mutationFn: async ({ confirm, allowDup }: { confirm: boolean; allowDup: boolean }) => {
@@ -133,11 +157,14 @@ export function GuideForm({ draft }: { draft?: Guide }) {
     onSuccess: async (g) => {
       if (senderId && pickSender) localStorage.setItem(SENDER_KEY, String(senderId));
       await invalidate();
-      toast.success(g.folio ? `Guía ${g.folio} confirmada` : "Borrador guardado", g.folio ? "El folio quedó asignado." : "Puedes confirmarlo después.");
+      setReviewing(false);
+      toast.success(g.folio ? `Guía ${printedFolio(g.folio)} confirmada` : "Borrador guardado",
+        g.folio ? (g.manifest ? `Agregada al manifiesto ${g.manifest.number}.` : "El folio quedó asignado.") : "Puedes confirmarlo después.");
       if (draft) router.push(`/guias/${g.id}`);
       else setDone(g);
     },
     onError: (e) => {
+      setReviewing(false);
       if (e instanceof ApiError && e.code === "DUPLICATE_ORDER") {
         setDupOrder({ message: e.message, guides: (e.data.guides as { id: number; reference: string; recipient: string; status: string }[]) ?? [] });
         return;
@@ -158,17 +185,19 @@ export function GuideForm({ draft }: { draft?: Guide }) {
       shiftId: shiftId ? Number(shiftId) : undefined,
       recipientId: mode === "search" ? recipient?.id : undefined,
       newRecipient: mode === "new" ? { firstName: rcpt.firstName, lastName: rcpt.lastName, phone: rcpt.phone, email: rcpt.email, address, saveToCatalog: false, allowProbableDuplicate: allowProbable } : undefined,
-      cdReference: cd, orderReference: order.trim(), packageCount: totalPackages || 1, notes,
+      cdReference: cd || undefined, orderReference: order.trim() || undefined, subRoute: subRoute || undefined, notes,
+      shippingRouteId: routeOverride ? routeOverride.id : undefined,
+      routeChangeReason: routeChanged ? routeOverride?.reason : undefined,
       shipping: {
-        originCode: originCode || undefined, destinationCode: destination || undefined, dimensions: dimensions || undefined,
+        originCode: originCode || undefined, destinationCode: destination || undefined,
+        dimensions: dimsNA ? undefined : dimensions || undefined, dimensionsNotApplicable: dimsNA, weightNotApplicable: weightNA,
         serviceType: serviceCode, commitmentDate: commitment || undefined,
       },
-      items: packs.map((p, idx) => {
-        const c = conceptFor(p.name);
+      items: cart.filter((l) => l.type.trim() && qtyOf(l) > 0).map((l) => {
+        const c = conceptFor(l.type);
         return {
-          conceptId: c?.id, description: c ? undefined : p.name,
-          quantity: several ? Number(p.qty) : totalPackages, unit: c ? undefined : "PIEZA",
-          weightKg: idx === 0 && weight ? Number(weight) : undefined,
+          conceptId: c?.id, description: c ? undefined : l.type.trim(), quantity: qtyOf(l), unit: c ? undefined : "PIEZA",
+          detail: l.detail.trim() || undefined, weightKg: !weightNA && l.weight ? Number(l.weight) : undefined,
         };
       }),
       confirm,
@@ -185,22 +214,35 @@ export function GuideForm({ draft }: { draft?: Guide }) {
       if (confirm && !rcpt.street.trim()) e.street = "Necesaria para confirmar.";
       if (confirm && !rcpt.city.trim()) e.city = "Necesaria para confirmar.";
     }
-    if (!several && !(Number(packages) >= 1)) e.packages = "Mínimo 1.";
-    if (packs.length === 0) e.packs = "Elige el tipo de bulto.";
-    if (several && packs.some((p) => !(Number(p.qty) >= 1))) e.packs = "Indica cuántos bultos de cada tipo.";
+    const badLine = cart.find((l) => !l.type.trim() || !/^\d+$/.test(l.qty) || Number(l.qty) < 1);
+    if (badLine) e.cart = !badLine.type.trim() ? "Elige el tipo de bulto de cada renglón." : "Escribe la cantidad de cada renglón (número entero, mínimo 1).";
+    else if (confirm && pieces < 1) e.cart = "Agrega al menos un bulto con su cantidad.";
+    if (cart.some((l) => l.weight && !(Number(l.weight) >= 0))) e.cart = "El peso debe ser un número.";
     if (originCode && originCode.length < 2) e.origin = "2 a 5 letras.";
     if (destination && destination.length < 2) e.destination = "2 a 5 letras.";
     if (confirm && !destination) e.destination = "Necesaria para confirmar.";
+    if (routeChanged && !routeOverride?.reason.trim()) e.route = "Indica el motivo del cambio de ruta.";
     setErrors(e);
     if (e.origin || e.destination) setMoreOpen(true);
     return Object.keys(e).length === 0;
   }
 
-  function submit(confirm: boolean) {
+  function openReview() {
     setServerError(null);
-    if (mutation.isPending) return; // evita doble envío
-    if (!validate(confirm)) return;
-    mutation.mutate({ confirm, allowDup: allowDupOrder });
+    if (!validate(true)) return;
+    setVerified(false);
+    setReviewing(true);
+  }
+
+  function saveDraft() {
+    setServerError(null);
+    if (mutation.isPending || !validate(false)) return;
+    mutation.mutate({ confirm: false, allowDup: allowDupOrder });
+  }
+
+  function confirmFromReview() {
+    if (mutation.isPending || !verified) return; // evita doble envío; el clientRequestId protege además en el servidor
+    mutation.mutate({ confirm: true, allowDup: allowDupOrder });
   }
 
   function chooseRecipient(r: Recipient) {
@@ -208,20 +250,25 @@ export function GuideForm({ draft }: { draft?: Guide }) {
     setMode("search");
     setErrors((e) => ({ ...e, recipient: "", destination: "" }));
     setDestination(r.destinationCode ?? "");
-    setCd(r.subRoute ?? "");
+    setSubRoute(r.subRoute ?? "");
     if (!r.destinationCode) setMoreOpen(true);
     setTimeout(() => orderRef.current?.focus(), 30);
   }
 
-  function togglePack(name: string) {
-    setErrors((e) => ({ ...e, packs: "" }));
-    setPacks((list) => {
-      if (list.some((p) => sameName(p.name, name))) return list.filter((p) => !sameName(p.name, name));
-      // Al pasar de uno a varios tipos, el primero conserva los bultos ya capturados.
-      const base = list.length === 1 ? [{ ...list[0], qty: packages || "1" }] : list;
-      return [...base, { name, qty: list.length === 0 ? packages || "1" : "1" }];
-    });
+  /** Agrega un renglón del tipo elegido (o enfoca el existente) con la cantidad VACÍA. */
+  function addLine(type: string) {
+    setErrors((e) => ({ ...e, cart: "" }));
+    const existing = cart.find((l) => sameName(l.type, type));
+    if (existing) {
+      setTimeout(() => qtyRefs.current[existing.key]?.focus(), 20);
+      return;
+    }
+    const line: CartLine = { key: uuid(), type, qty: "", detail: "", weight: "" };
+    setCart((c) => [...c, line]);
+    setTimeout(() => qtyRefs.current[line.key]?.focus(), 30);
   }
+  const updateLine = (key: string, patch: Partial<CartLine>) => setCart((c) => c.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  const removeLine = (key: string) => setCart((c) => c.filter((l) => l.key !== key));
 
   function reset() {
     setDone(null);
@@ -235,30 +282,20 @@ export function GuideForm({ draft }: { draft?: Guide }) {
     setAllowDupOrder(false);
     setOrder("");
     setCd("");
+    setSubRoute("");
     setDestination("");
-    setPackages("1");
-    setPacks(DEFAULT_PACKS);
-    setWeight("");
+    setCart([]);
+    setWeightNA(false);
+    setDimsNA(false);
     setNotes("");
     setDimensions("");
     setCommitment("");
+    setRouteOverride(null);
     setMoreOpen(false);
     setErrors({});
     setServerError(null);
     setTimeout(() => searchRef.current?.focus(), 50);
   }
-
-  // Atajo: Ctrl/Cmd + Enter confirma (o guarda si no hay permiso).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !done && adding === null) {
-        e.preventDefault();
-        submit(can("GUIDES_CONFIRM"));
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
 
   if (done) {
     return (
@@ -267,32 +304,32 @@ export function GuideForm({ draft }: { draft?: Guide }) {
         <h2 className="mt-4 font-display text-2xl font-bold text-ink">{done.folio ? "Guía confirmada" : "Borrador guardado"}</h2>
         <p className="mt-2 font-mono text-3xl font-bold text-brand-700">{done.folio ? printedFolio(done.folio) : done.reference}</p>
         {done.shipping?.destinationCode && (
-          <p className="mt-1 text-lg font-semibold text-ink">{done.shipping.originCode ?? "—"} → {done.shipping.destinationCode}</p>
+          <p className="mt-1 text-lg font-semibold text-ink">{done.shipping.originCode ?? "—"} → {done.shipping.destinationCode}{done.subRoute ? ` · ${done.subRoute}` : ""}</p>
         )}
-        <p className="mt-2 text-muted">{done.recipient.name} · {done.recipient.address.city ?? ""}</p>
+        <p className="mt-2 text-muted">{done.recipient.name} · {piecesLabel(done.packageCount ?? 0)}</p>
+        {done.manifest && <p className="mt-1 text-sm text-muted">Manifiesto en preparación: <b className="text-ink">{done.manifest.number}</b>{done.manifest.shippingRoute ? ` · ruta ${done.manifest.shippingRoute.name}` : ""}</p>}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button onClick={reset} icon={<FilePlus2 className="size-4" />} autoFocus>Nueva guía</Button>
           <Button variant="outline" onClick={() => router.push(`/guias/${done.id}`)}>Ver guía</Button>
-          {done.folio && (
-            <Button variant="outline" icon={<FileText className="size-4" />}
-              onClick={() => downloadFile(`/guides/${done.id}/pdf`, `guia-${done.folio}.pdf`, undefined, true).catch((e) => toast.error("No se pudo abrir el PDF", errorMessage(e)))}>
-              Documento PDF
-            </Button>
-          )}
         </div>
+        {done.folio && <div className="mt-4 flex justify-center"><GuidePrintButtons guide={done} /></div>}
       </Card>
     );
   }
 
   const canAdd = can("RECIPIENTS_MANAGE") && !!senderId;
+  // Enter en un campo de texto no envía ni confirma nada (sólo en áreas de texto agrega renglón).
+  const blockEnter = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") e.preventDefault();
+  };
 
   return (
-    <form className="grid gap-5 xl:grid-cols-[1fr_340px]" onSubmit={(e) => { e.preventDefault(); submit(can("GUIDES_CONFIRM")); }} noValidate>
+    <form className="grid gap-5 xl:grid-cols-[1fr_340px]" onSubmit={(e) => e.preventDefault()} onKeyDown={blockEnter} noValidate>
       <div className="space-y-5">
         <Card className="space-y-5 p-5 sm:p-6">
           {pickSender && (
             <Field label="Remitente" error={errors.sender} required hint="Sólo en punto de venta: los usuarios con remitente asignado no ven este campo.">
-              <Select value={senderId ?? ""} onChange={(e) => { setSenderId(Number(e.target.value)); setRecipient(null); }}>
+              <Select value={senderId ?? ""} onChange={(e) => { setSenderId(Number(e.target.value)); setRecipient(null); setRouteOverride(null); }}>
                 {senders.data?.content.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </Select>
             </Field>
@@ -308,10 +345,10 @@ export function GuideForm({ draft }: { draft?: Guide }) {
                   <UserRound className="mt-0.5 size-5 text-brand-600" aria-hidden />
                   <div className="min-w-0 flex-1">
                     <p className="font-bold text-ink">{recipient.clientCode && <span className="mr-2 font-mono text-sm font-semibold text-muted">#{recipient.clientCode}</span>}{recipient.fullName}</p>
-                    {recipient.subRoute && <p className="mt-1 text-sm font-semibold text-brand-700">Clave CD {recipient.subRoute} · Destino {recipient.destinationCode}</p>}
+                    {recipient.subRoute && <p className="mt-1 text-sm font-semibold text-brand-700">Subruta {recipient.subRoute} · Destino {recipient.destinationCode}</p>}
                     <p className="text-sm text-ink-soft">{joinAddress(recipient.address) || "Sin dirección registrada"}</p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => { setRecipient(null); setDestination(""); setCd(""); setTimeout(() => searchRef.current?.focus(), 30); }} icon={<X className="size-4" />}>Cambiar</Button>
+                  <Button variant="ghost" size="sm" onClick={() => { setRecipient(null); setDestination(""); setSubRoute(""); setTimeout(() => searchRef.current?.focus(), 30); }} icon={<X className="size-4" />}>Cambiar</Button>
                 </div>
               </div>
             ) : (
@@ -340,18 +377,11 @@ export function GuideForm({ draft }: { draft?: Guide }) {
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
-            {/* 2. Pedido(s) */}
-            <Field label="Número de pedido" hint="Si son varios, sepáralos con coma (ej. 4501, 4502)">
-              <Input ref={orderRef} value={order} maxLength={80} placeholder="Ej. 4501"
-                onChange={(e) => { setOrder(e.target.value); setDupOrder(null); setAllowDupOrder(false); }} />
-            </Field>
-            {/* 3. Bultos */}
-            <Field label="Cantidad de bultos" error={errors.packages} required hint={several ? "Suma de cada tipo" : undefined}>
-              <Input inputMode="numeric" value={several ? String(totalPackages) : packages} readOnly={several} className={cn("text-lg font-bold", several && "bg-canvas")}
-                onChange={(e) => setPackages(e.target.value.replace(/\D/g, ""))} />
-            </Field>
-          </div>
+          {/* 2. Pedido(s) */}
+          <Field label="Número de pedido" hint="Si son varios, sepáralos con coma (ej. 4501, 4502)">
+            <Input ref={orderRef} value={order} maxLength={80} placeholder="Ej. 4501"
+              onChange={(e) => { setOrder(e.target.value); setDupOrder(null); setAllowDupOrder(false); }} />
+          </Field>
 
           {dupOrder && (
             <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm" role="alert">
@@ -364,50 +394,60 @@ export function GuideForm({ draft }: { draft?: Guide }) {
               </ul>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" onClick={() => { setDupOrder(null); setTimeout(() => orderRef.current?.focus(), 30); }}>Corregir el pedido</Button>
-                <Button size="sm" variant="ghost" onClick={() => { setAllowDupOrder(true); setDupOrder(null); setServerError(null); if (validate(can("GUIDES_CONFIRM"))) mutation.mutate({ confirm: can("GUIDES_CONFIRM"), allowDup: true }); }}>
-                  Es otro envío: generar de todas formas
+                <Button size="sm" variant="ghost" onClick={() => { setAllowDupOrder(true); setDupOrder(null); setServerError(null); }}>
+                  Es otro envío: permitir y volver a revisar
                 </Button>
               </div>
             </div>
           )}
 
-          {/* 4. Tipo de bulto (uno o varios) */}
-          <div>
-            <p className="text-sm font-semibold text-ink-soft">Tipo de bulto<span className="ml-0.5 text-accent-600" aria-hidden>*</span> <span className="font-normal text-muted">· puedes elegir varios</span></p>
-            <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Tipo de bulto">
-              {packTypes.map((t) => {
-                const on = packs.some((p) => sameName(p.name, t));
-                return (
-                  <button key={t} type="button" aria-pressed={on} onClick={() => togglePack(t)}
-                    className={cn("rounded-xl border px-4 py-2 text-sm font-semibold transition",
-                      on ? "border-brand-600 bg-brand-600 text-white" : "border-line bg-white text-ink-soft hover:border-brand-400 hover:text-brand-700")}>
-                    {t}
-                  </button>
-                );
-              })}
-            </div>
-            {several && (
-              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                {packs.map((p) => (
-                  <Field key={p.name} label={`¿Cuántos? ${p.name}`}>
-                    <Input inputMode="numeric" value={p.qty}
-                      onChange={(e) => { const v = e.target.value.replace(/\D/g, ""); setPacks((list) => list.map((x) => (x.name === p.name ? { ...x, qty: v } : x))); }} />
-                  </Field>
-                ))}
-              </div>
-            )}
-            {errors.packs && <p className="mt-1.5 text-[13px] font-semibold text-red-600">{errors.packs}</p>}
-          </div>
+          {/* 3. Carrito de bultos */}
+          <PackageCart cart={cart} packTypes={packTypes} weightNA={weightNA} error={errors.cart} qtyRefs={qtyRefs}
+            onAdd={addLine} onUpdate={updateLine} onRemove={removeLine} pieces={pieces} />
         </Card>
 
-        {/* Más datos: se llenan solos con el cliente y el remitente */}
+        {/* Ruta de embarque */}
+        <Card className="space-y-3 p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="flex items-center gap-2 text-base font-bold text-ink"><Route className="size-5 text-brand-600" /> Ruta de embarque</p>
+              <p className="text-[13px] text-muted">Organiza el manifiesto de salida. Al confirmar, la guía se agrega sola al manifiesto en preparación de esta ruta.</p>
+            </div>
+            {routeName ? <Badge tone={routeChanged ? "orange" : "blue"}>{routeName.code} · {routeName.name}{routeChanged ? " (cambiada)" : ""}</Badge>
+              : <Badge tone="slate">Sin ruta asignada</Badge>}
+          </div>
+          {defaultRoute && <p className="text-[13px] text-muted">Predeterminada del remitente: <b className="text-ink">{defaultRoute.name}</b></p>}
+          {canReroute ? (
+            <div className="flex flex-wrap items-end gap-3">
+              <Field label="Cambiar ruta" className="min-w-56 flex-1" error={errors.route}>
+                <Select value={routeId ?? ""} onChange={(e) => {
+                  const id = Number(e.target.value);
+                  if (!id) return;
+                  if (defaultRoute && id === defaultRoute.id) { setRouteOverride(null); return; }
+                  if (!defaultRoute) { setRouteOverride({ id, reason: "" }); return; }
+                  setRouteDialog({ id, reason: "" });
+                }}>
+                  <option value="" disabled>Selecciona…</option>
+                  {routes.data?.map((r) => <option key={r.id} value={r.id}>{r.code} · {r.name}</option>)}
+                </Select>
+              </Field>
+              {routeChanged && <Button variant="ghost" size="sm" onClick={() => setRouteOverride(null)}>Volver a la predeterminada</Button>}
+            </div>
+          ) : !defaultRoute ? (
+            <p className="text-[13px] text-accent-700">El remitente no tiene ruta predeterminada: la guía quedará disponible para que Operaciones la asigne.</p>
+          ) : null}
+          {routeChanged && routeOverride?.reason && <p className="rounded-xl bg-accent-50 px-3 py-2 text-[13px] text-accent-700">Motivo del cambio: {routeOverride.reason}</p>}
+        </Card>
+
+        {/* Más datos */}
         <Card className="p-0">
           <button type="button" onClick={() => setMoreOpen((o) => !o)} aria-expanded={moreOpen}
             className="flex w-full items-center justify-between gap-2 px-5 py-4 text-left sm:px-6">
             <span>
-              <span className="block text-base font-bold text-ink">Más datos <span className="font-normal text-muted">(se llenan solos)</span></span>
+              <span className="block text-base font-bold text-ink">Datos de la guía <span className="font-normal text-muted">(se llenan solos)</span></span>
               <span className="block text-[13px] text-muted">
-                {originCode || "—"} → {destination || "—"} · {serviceCode}{cd ? ` · Clave CD ${cd}` : ""}
+                {originCode || "—"} → {destination || "—"} · {serviceCode}{subRoute ? ` · Subruta ${subRoute}` : ""}
+                {" · Peso "}{weightNA ? "no aplica" : totalWeight ? `${totalWeight} kg` : "—"}{" · Dim. "}{dimsNA ? "no aplica" : dimensions || "—"}
               </span>
             </span>
             <ChevronDown className={cn("size-5 text-muted transition", moreOpen && "rotate-180")} aria-hidden />
@@ -416,34 +456,40 @@ export function GuideForm({ draft }: { draft?: Guide }) {
             <div className="space-y-4 border-t border-line-soft px-5 pb-5 pt-4 sm:px-6">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
                 <Field label="Plaza de origen" error={errors.origin} hint={currentSender?.plazaCode ? `Del remitente: ${currentSender.plazaCode}` : "Ej. PBA"}>
-                  <Input value={originCode} maxLength={5} placeholder="PBA" className="font-mono text-lg uppercase"
-                    onChange={(e) => setOrigin(plaza(e.target.value))} />
+                  <Input value={originCode} maxLength={5} placeholder="PBA" className="font-mono text-lg uppercase" onChange={(e) => setOrigin(plaza(e.target.value))} />
                 </Field>
                 <span className="hidden pb-3 text-2xl text-brand-400 sm:block" aria-hidden>→</span>
                 <Field label="Plaza de destino" error={errors.destination} required hint="Sale de la subruta del cliente (ej. OAX)">
-                  <Input value={destination} maxLength={5} placeholder="OAX" className="font-mono text-lg uppercase"
-                    onChange={(e) => setDestination(plaza(e.target.value))} />
+                  <Input value={destination} maxLength={5} placeholder="OAX" className="font-mono text-lg uppercase" onChange={(e) => setDestination(plaza(e.target.value))} />
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                <Field label="Subruta" hint="Código del cliente (ej. CVA-01). Se imprime junto a las piezas">
+                  <Input value={subRoute} placeholder="CVA-01" maxLength={20} className="font-mono uppercase" onChange={(e) => setSubRoute(e.target.value.toUpperCase())} />
+                </Field>
+                <Field label="Referencia CD" hint="Documento de origen (opcional). No es la subruta">
+                  <Input value={cd} maxLength={80} onChange={(e) => setCd(e.target.value)} />
+                </Field>
                 <Field label="Servicio">
                   <Select value={serviceCode} onChange={(e) => { setService(e.target.value); setCommitment(""); }}>
                     {(services.data ?? [{ code: "ORDINARIO", days: 1 }]).map((s) => <option key={s.code} value={s.code}>{s.code}</option>)}
                   </Select>
                 </Field>
                 <Field label="Fecha compromiso" hint={commitment ? "Capturada manualmente" : `Automática: ${serviceDays === 0 ? "mismo día" : `+${serviceDays} día(s)`}`}>
-                  <Input type="date" value={commitment || addDaysKey(serviceDays)} min={todayKey()}
-                    onChange={(e) => setCommitment(e.target.value)} />
+                  <Input type="date" value={commitment || addDaysKey(serviceDays)} min={todayKey()} onChange={(e) => setCommitment(e.target.value)} />
                 </Field>
-                <Field label="Clave CD" hint="Se imprime junto a las piezas">
-                  <Input value={cd} placeholder="CVA-01" className="uppercase" onChange={(e) => setCd(e.target.value.toUpperCase())} />
-                </Field>
-                <Field label="Dimensiones (cm)" hint="Largo x ancho x alto">
-                  <Input value={dimensions} placeholder="30 x 20 x 15" onChange={(e) => setDimensions(e.target.value)} />
-                </Field>
-                <Field label="Peso total (kg)">
-                  <Input inputMode="decimal" value={weight} placeholder="Opcional" onChange={(e) => setWeight(e.target.value.replace(/[^\d.]/g, ""))} />
-                </Field>
+                <div className="space-y-2">
+                  <Field label="Dimensiones (cm)" hint="Largo x ancho x alto">
+                    <Input value={dimsNA ? "" : dimensions} disabled={dimsNA} placeholder={dimsNA ? "NO APLICA" : "30 x 20 x 15"} onChange={(e) => setDimensions(e.target.value)} />
+                  </Field>
+                  <label className="flex items-center gap-2 text-sm font-semibold text-ink-soft"><input type="checkbox" checked={dimsNA} onChange={(e) => setDimsNA(e.target.checked)} /> No aplica</label>
+                </div>
+                <div className="space-y-2">
+                  <Field label="Peso total (kg)" hint={weightNA ? "Se imprimirá NO APLICA" : "Suma del peso de los renglones"}>
+                    <Input value={weightNA ? "" : totalWeight ? String(totalWeight) : ""} readOnly disabled placeholder={weightNA ? "NO APLICA" : "Captúralo en cada renglón"} />
+                  </Field>
+                  <label className="flex items-center gap-2 text-sm font-semibold text-ink-soft"><input type="checkbox" checked={weightNA} onChange={(e) => setWeightNA(e.target.checked)} /> No aplica</label>
+                </div>
                 <Field label="Turno">
                   <Select value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
                     <option value="">Automático</option>
@@ -459,21 +505,73 @@ export function GuideForm({ draft }: { draft?: Guide }) {
 
       <div className="space-y-5 xl:sticky xl:top-24 xl:self-start">
         <Card className="space-y-3 p-5">
+          <div className="rounded-2xl bg-canvas p-4 text-center">
+            <p className="text-[12px] font-bold uppercase tracking-wider text-subtle">Total de la guía</p>
+            <p className="font-display text-4xl font-bold text-ink" aria-live="polite">{pieces}</p>
+            <p className="text-sm text-muted">{pieces === 1 ? "pieza" : "piezas"} · {cart.length} {cart.length === 1 ? "tipo de bulto" : "tipos de bulto"} · {orders.length} {orders.length === 1 ? "pedido" : "pedidos"}</p>
+          </div>
           <InlineError message={serverError} />
-          {can("GUIDES_CONFIRM") && (
-            <Button type="submit" size="lg" className="w-full" loading={mutation.isPending && mutation.variables?.confirm === true} icon={<CircleCheck className="size-5" />}>
-              Confirmar y asignar folio
+          {canConfirm && (
+            <Button size="lg" className="w-full" icon={<ClipboardCheck className="size-5" />} onClick={openReview} disabled={mutation.isPending}>
+              Revisar y confirmar
             </Button>
           )}
-          <Button variant={can("GUIDES_CONFIRM") ? "outline" : "primary"} size="lg" className="w-full" loading={mutation.isPending && mutation.variables?.confirm === false}
-            icon={<Save className="size-5" />} onClick={() => submit(false)}>
+          <Button variant={canConfirm ? "outline" : "primary"} size="lg" className="w-full" loading={mutation.isPending && mutation.variables?.confirm === false}
+            icon={<Save className="size-5" />} onClick={saveDraft}>
             Guardar borrador
           </Button>
-          {!can("GUIDES_CONFIRM") && <p className="text-[13px] text-muted">Tu usuario no confirma guías: el administrador las revisará y confirmará.</p>}
-          <p className="flex items-center gap-1.5 text-[12px] text-subtle"><Keyboard className="size-3.5" /> Ctrl + Enter para {can("GUIDES_CONFIRM") ? "confirmar" : "guardar"}</p>
+          {!canConfirm && <p className="text-[13px] text-muted">Tu usuario no confirma guías: el administrador las revisará y confirmará.</p>}
+          <p className="text-[12px] text-subtle">La tecla Enter no confirma: el folio sólo se genera desde la pantalla de revisión.</p>
           {draft && <Link href={`/guias/${draft.id}`} className="block text-center text-sm font-semibold text-brand-600">Cancelar edición</Link>}
         </Card>
       </div>
+
+      {/* Revisión final antes de generar el folio */}
+      <Modal open={reviewing} onClose={() => !mutation.isPending && setReviewing(false)} size="lg" icon={<ClipboardCheck className="size-5 text-brand-600" />}
+        title="Revisa la guía antes de confirmar" description="Verifica cliente, pedidos, bultos y piezas. Al confirmar se genera el folio definitivo."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setReviewing(false)} disabled={mutation.isPending} autoFocus>Volver a editar</Button>
+            <Button icon={<CircleCheck className="size-4" />} loading={mutation.isPending} disabled={!verified || mutation.isPending} onClick={confirmFromReview}>
+              Confirmar y generar folio
+            </Button>
+          </>
+        }>
+        <div className="space-y-4 text-sm">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ReviewItem label="Cliente">{mode === "search" ? recipient?.fullName : `${rcpt.firstName} ${rcpt.lastName}`.trim()}</ReviewItem>
+            <ReviewItem label="Ruta">{originCode || "—"} → {destination || "—"}{subRoute ? ` · Subruta ${subRoute}` : ""}</ReviewItem>
+            <ReviewItem label={`Pedidos (${orders.length})`}>{orders.length ? orders.join(", ") : "Sin número de pedido"}</ReviewItem>
+            <ReviewItem label="Ruta de embarque">{routeName ? `${routeName.code} · ${routeName.name}${routeChanged ? " (cambiada)" : ""}` : "Sin ruta"}</ReviewItem>
+            <ReviewItem label="Peso">{weightNA ? "NO APLICA" : totalWeight ? `${totalWeight} kg` : "—"}</ReviewItem>
+            <ReviewItem label="Dimensiones">{dimsNA ? "NO APLICA" : dimensions || "—"}</ReviewItem>
+          </div>
+          <table className="w-full text-left">
+            <thead><tr className="border-b border-line text-[12px] uppercase tracking-wider text-subtle"><th className="py-2">Tipo de bulto</th><th className="py-2">Descripción</th><th className="py-2 text-right">Cantidad</th></tr></thead>
+            <tbody className="divide-y divide-line-soft">
+              {cart.map((l) => <tr key={l.key}><td className="py-2 font-semibold text-ink">{l.type}</td><td className="py-2 text-muted">{l.detail || "—"}</td><td className="py-2 text-right font-bold">{qtyOf(l)}</td></tr>)}
+            </tbody>
+            <tfoot><tr className="border-t-2 border-line"><td className="py-2 font-bold" colSpan={2}>Total</td><td className="py-2 text-right text-lg font-bold text-brand-700">{piecesLabel(pieces)}</td></tr></tfoot>
+          </table>
+          {allowDupOrder && <p className="rounded-xl bg-accent-50 px-3 py-2 text-accent-700">Se generará aunque el pedido ya esté en otra guía (lo indicaste como otro envío).</p>}
+          <label className="flex items-start gap-2 rounded-xl border border-line p-3 font-semibold text-ink">
+            <input type="checkbox" className="mt-1" checked={verified} onChange={(e) => setVerified(e.target.checked)} />
+            Verifiqué que el cliente, los pedidos, los bultos y las {piecesLabel(pieces)} son correctos.
+          </label>
+        </div>
+      </Modal>
+
+      <Modal open={!!routeDialog} onClose={() => setRouteDialog(null)} size="sm" icon={<Route className="size-5 text-accent-600" />}
+        title="¿Cambiar la ruta de embarque?"
+        description={`La ruta predeterminada del remitente es ${defaultRoute?.name ?? "—"}. El cambio queda registrado con tu nombre, la fecha y el motivo.`}
+        footer={<>
+          <Button variant="outline" onClick={() => setRouteDialog(null)}>Cancelar</Button>
+          <Button disabled={!routeDialog?.reason.trim()} onClick={() => { if (routeDialog) setRouteOverride(routeDialog); setRouteDialog(null); setErrors((e) => ({ ...e, route: "" })); }}>Cambiar ruta</Button>
+        </>}>
+        <Field label="Motivo del cambio" required>
+          <Textarea rows={2} value={routeDialog?.reason ?? ""} onChange={(e) => setRouteDialog((d) => (d ? { ...d, reason: e.target.value } : d))} />
+        </Field>
+      </Modal>
 
       {adding !== null && (
         <RecipientEditor modal recipient={null} senderId={senderId} initialName={adding}
@@ -481,6 +579,80 @@ export function GuideForm({ draft }: { draft?: Guide }) {
           onSaved={(r) => { setAdding(null); chooseRecipient(r); }} />
       )}
     </form>
+  );
+}
+
+function ReviewItem({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl bg-canvas px-3 py-2">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-subtle">{label}</p>
+      <p className="font-semibold text-ink">{children || "—"}</p>
+    </div>
+  );
+}
+
+/** Carrito de bultos: varios tipos en una misma guía; agregar, editar o quitar renglones antes de confirmar. */
+export function PackageCart({ cart, packTypes, weightNA, error, qtyRefs, onAdd, onUpdate, onRemove, pieces }: {
+  cart: CartLine[]; packTypes: string[]; weightNA: boolean; error?: string; pieces: number;
+  qtyRefs: React.RefObject<Record<string, HTMLInputElement | null>>;
+  onAdd: (type: string) => void; onUpdate: (key: string, patch: Partial<CartLine>) => void; onRemove: (key: string) => void;
+}) {
+  return (
+    <div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-semibold text-ink-soft">Bultos<span className="ml-0.5 text-accent-600" aria-hidden>*</span> <span className="font-normal text-muted">· agrega cada tipo y escribe su cantidad</span></p>
+        <p className="text-sm font-bold text-brand-700">{piecesLabel(pieces)}</p>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Agregar tipo de bulto">
+        {packTypes.map((t) => {
+          const on = cart.some((l) => sameName(l.type, t));
+          return (
+            <button key={t} type="button" onClick={() => onAdd(t)}
+              className={cn("inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-sm font-semibold transition",
+                on ? "border-brand-600 bg-brand-50 text-brand-700" : "border-line bg-white text-ink-soft hover:border-brand-400 hover:text-brand-700")}>
+              <PackagePlus className="size-4" aria-hidden />{t}
+            </button>
+          );
+        })}
+      </div>
+      {cart.length === 0 ? (
+        <p className="mt-3 rounded-2xl border border-dashed border-line px-4 py-5 text-center text-sm text-muted">Aún no hay bultos. Toca un tipo para agregarlo.</p>
+      ) : (
+        <div className="mt-3 overflow-x-auto rounded-2xl border border-line">
+          <table className="w-full min-w-[560px] text-left text-sm">
+            <thead className="bg-canvas text-[12px] font-bold uppercase tracking-wide text-muted">
+              <tr><th className="px-3 py-2">Tipo</th><th className="px-3 py-2 w-28">Cantidad</th><th className="px-3 py-2">Descripción (opcional)</th>{!weightNA && <th className="px-3 py-2 w-28">Peso kg</th>}<th className="w-10" /></tr>
+            </thead>
+            <tbody className="divide-y divide-line-soft">
+              {cart.map((l) => (
+                <tr key={l.key}>
+                  <td className="px-3 py-2">
+                    <Select className="h-9" value={l.type} aria-label="Tipo de bulto" onChange={(e) => onUpdate(l.key, { type: e.target.value })}>
+                      {packTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </Select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <Input ref={(el) => { qtyRefs.current[l.key] = el; }} inputMode="numeric" value={l.qty} placeholder="—" aria-label={`Cantidad de ${l.type}`}
+                      className="h-9 text-center text-base font-bold" onChange={(e) => onUpdate(l.key, { qty: e.target.value.replace(/\D/g, "").slice(0, 4) })} />
+                  </td>
+                  <td className="px-3 py-2"><Input className="h-9" value={l.detail} maxLength={300} aria-label="Descripción" onChange={(e) => onUpdate(l.key, { detail: e.target.value })} /></td>
+                  {!weightNA && (
+                    <td className="px-3 py-2"><Input className="h-9" inputMode="decimal" value={l.weight} aria-label="Peso en kg" onChange={(e) => onUpdate(l.key, { weight: e.target.value.replace(/[^\d.]/g, "") })} /></td>
+                  )}
+                  <td className="px-2 py-2">
+                    <Button variant="ghost" size="icon" className="h-9 w-9 text-red-600" aria-label={`Quitar ${l.type}`} onClick={() => onRemove(l.key)} icon={<Trash2 className="size-4" />} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-line bg-canvas/60"><td className="px-3 py-2 font-bold">Total</td><td className="px-3 py-2 text-center text-base font-bold text-brand-700">{pieces}</td><td className="px-3 py-2 text-muted" colSpan={weightNA ? 2 : 3}>{piecesLabel(pieces)} en esta guía</td></tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+      {error && <p className="mt-1.5 text-[13px] font-semibold text-red-600" role="alert">{error}</p>}
+    </div>
   );
 }
 
@@ -520,7 +692,8 @@ function RecipientSearch({ senderId, onSelect, onAdd, canAdd, error, inputRef }:
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(a + 1, canAdd ? results.length : results.length - 1)); }
               else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
-              else if (e.key === "Enter" && !(e.ctrlKey || e.metaKey)) {
+              else if (e.key === "Enter") {
+                // Enter sólo elige al cliente resaltado; nunca envía la guía.
                 e.preventDefault();
                 if (results[active]) onSelect(results[active]);
                 else if (q.trim() && canAdd) onAdd(q);
@@ -562,3 +735,4 @@ function RecipientSearch({ senderId, onSelect, onAdd, canAdd, error, inputRef }:
     </div>
   );
 }
+

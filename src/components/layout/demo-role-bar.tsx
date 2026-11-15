@@ -14,6 +14,8 @@ import { cn } from "@/lib/utils";
 const ROLES = [
   { code: "REMITENTE", label: "Remitente" },
   { code: "ADMIN", label: "Admin" },
+  { code: "OPERACIONES", label: "Operaciones" },
+  { code: "ENCARGADO", label: "Encargado" },
   { code: "RECEPCION", label: "Receptor" },
   { code: "REPARTIDOR", label: "Repartidor" },
 ] as const;

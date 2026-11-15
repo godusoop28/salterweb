@@ -12,7 +12,7 @@ import { Drawer } from "@/components/ui/overlay";
 import { Card, EmptyState, PageHeader } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/toast";
 import { api, errorMessage } from "@/lib/api/client";
-import { qk, useSenders } from "@/lib/api/hooks";
+import { qk, useSenders, useShippingRoutes } from "@/lib/api/hooks";
 import type { Sender } from "@/lib/api/types";
 import { joinAddress } from "@/lib/format";
 
@@ -56,13 +56,14 @@ function SenderDrawer({ sender, onClose }: { sender: Sender | null; onClose: () 
   const a = sender?.address ?? {};
   const [f, setF] = useState({ code: sender?.code ?? "", name: sender?.name ?? "", kind: sender?.kind ?? "EMPRESA", contactName: sender?.contactName ?? "", phone: sender?.phone ?? "", email: sender?.email ?? "",
     street: a.street ?? "", neighborhood: a.neighborhood ?? "", city: a.city ?? "", state: a.state ?? "", zip: a.zip ?? "", notes: sender?.notes ?? "", active: sender?.active ?? true,
-    plazaCode: sender?.plazaCode ?? "", guidePrefix: sender?.guidePrefix ?? "" });
+    plazaCode: sender?.plazaCode ?? "", guidePrefix: sender?.guidePrefix ?? "", routeId: sender?.defaultShippingRoute ? String(sender.defaultShippingRoute.id) : "" });
+  const routes = useShippingRoutes(true);
   const [error, setError] = useState<string | null>(null);
   const save = useMutation({
     mutationFn: () => {
       const body = { code: f.code || undefined, name: f.name, kind: f.kind, contactName: f.contactName, phone: f.phone, email: f.email || undefined, notes: f.notes,
         address: { street: f.street, neighborhood: f.neighborhood, city: f.city, state: f.state, zip: f.zip }, active: f.active, version: sender?.version,
-        plazaCode: f.plazaCode, guidePrefix: f.guidePrefix };
+        plazaCode: f.plazaCode, guidePrefix: f.guidePrefix, defaultShippingRouteId: f.routeId ? Number(f.routeId) : undefined };
       return sender ? api.put(`/senders/${sender.id}`, body) : api.post("/senders", body);
     },
     onSuccess: async () => { await qc.invalidateQueries({ queryKey: qk.senders }); toast.success("Remitente guardado"); onClose(); },
@@ -83,6 +84,12 @@ function SenderDrawer({ sender, onClose }: { sender: Sender | null; onClose: () 
         <Field label="Plaza de origen" hint="Se usa por defecto en la guía (ej. PBA)">
           <Input value={f.plazaCode} maxLength={5} placeholder="PBA" className="font-mono uppercase"
             onChange={(e) => setF({ ...f, plazaCode: e.target.value.replace(/[^a-zA-Z]/g, "").toUpperCase() })} />
+        </Field>
+        <Field label="Ruta de embarque predeterminada" hint="Se propone en cada guía; cambiarla requiere autorización y motivo">
+          <Select value={f.routeId} onChange={(e) => setF({ ...f, routeId: e.target.value })}>
+            <option value="">Sin ruta</option>
+            {routes.data?.map((r) => <option key={r.id} value={r.id}>{r.code} · {r.name}</option>)}
+          </Select>
         </Field>
         <Field label="Contacto"><Input value={f.contactName} onChange={set("contactName")} /></Field>
         <Field label="Teléfono"><Input value={f.phone} onChange={set("phone")} /></Field>

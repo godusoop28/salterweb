@@ -26,7 +26,7 @@ export function GuideActionDialog({ guide, kind, onClose, onDone }: { guide: Gui
   const couriers = useCouriers(true, kind === "ASSIGN");
   const [text, setText] = useState("");
   const [location, setLocation] = useState("");
-  const [count, setCount] = useState(String(guide.packageCount));
+  const [count, setCount] = useState(""); // Vacío: se captura lo que realmente llegó, nunca se prellena
   const [hasDiff, setHasDiff] = useState(false);
   const [diff, setDiff] = useState("");
   const [receivedBy, setReceivedBy] = useState("");

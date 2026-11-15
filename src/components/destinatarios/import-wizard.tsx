@@ -27,7 +27,7 @@ const FIELDS: { key: keyof ImportRow | "lastName2"; label: string; required?: bo
   { key: "state", label: "Estado" },
   { key: "zip", label: "Código postal" },
   { key: "route", label: "Ruta" },
-  { key: "subRoute", label: "Subruta / Clave CD (ej. CVA-01)" },
+  { key: "subRoute", label: "Subruta (ej. CVA-01)" },
   { key: "references", label: "Referencias" },
   { key: "notes", label: "Notas" },
 ];

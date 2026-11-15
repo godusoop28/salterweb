@@ -26,7 +26,7 @@ export function GuideStatusBadge({ status, size }: { status: GuideStatus; size?:
 }
 
 export const MANIFEST_STATUS: Record<ManifestStatus, { label: string; tone: Tone }> = {
-  BORRADOR: { label: "Borrador", tone: "slate" },
+  BORRADOR: { label: "En preparación", tone: "slate" },
   CERRADO: { label: "Cerrado", tone: "indigo" },
   DESPACHADO: { label: "Despachado", tone: "green" },
 };

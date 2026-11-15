@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  ChartColumn, ChevronsLeft, ChevronsRight, ClipboardList, FilePlus2, FileSpreadsheet, LayoutDashboard, LogOut, Menu, MoreHorizontal,
+  ArrowLeft, ChartColumn, ChevronsLeft, Home, Route, ChevronsRight, ClipboardList, FilePlus2, FileSpreadsheet, LayoutDashboard, LogOut, Menu, MoreHorizontal,
   Package, Search, Settings, Store, Truck, TriangleAlert, UserCog, Users, Warehouse, X, type LucideIcon,
 } from "lucide-react";
 import { Logo } from "@/components/branding/logo";
@@ -21,11 +21,13 @@ function useNav(): { operation: NavItem[]; admin: NavItem[] } {
   const guidesLabel = can("GUIDES_VIEW_ALL") ? "Guías" : can("SHIPMENTS_OWN") ? "Mis envíos" : "Mis guías";
   const operation: NavItem[] = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, perms: ["DASHBOARD_VIEW"], mobile: true },
+    ...(me && !can("DASHBOARD_VIEW") && can("SHIPMENTS_OWN", "REPORTS_OWN") ? [{ href: "/inicio", label: "Inicio", icon: Home, perms: [] as Permission[], mobile: true }] : []),
     { href: "/guias/nueva", label: "Nueva guía", icon: FilePlus2, perms: ["GUIDES_CREATE"], mobile: true },
     { href: "/guias/importar", label: "Guías desde archivo", icon: FileSpreadsheet, perms: ["GUIDES_CREATE"] },
     { href: "/guias", label: guidesLabel, icon: Package, perms: ["GUIDES_VIEW_ALL", "GUIDES_VIEW_OWN", "SHIPMENTS_OWN"], mobile: true },
     { href: "/destinatarios", label: "Destinatarios", icon: Users, perms: ["RECIPIENTS_VIEW"] },
-    { href: "/manifiestos", label: "Manifiestos y salidas", icon: ClipboardList, perms: ["MANIFESTS_VIEW", "MANIFESTS_MANAGE", "DISPATCH_AUTHORIZE"], mobile: true },
+    { href: "/rutas", label: "Rutas y operaciones", icon: Route, perms: ["ROUTES_VIEW", "ROUTES_MANAGE"], mobile: true },
+    { href: "/manifiestos", label: "Manifiestos y salidas", icon: ClipboardList, perms: ["MANIFESTS_VIEW", "MANIFESTS_MANAGE", "DISPATCH_AUTHORIZE", "DISPATCH_REGISTER"], mobile: true },
     { href: "/recepcion", label: "Recepción", icon: Warehouse, perms: ["RECEPTION_CONFIRM"], mobile: true },
     { href: "/repartidores", label: "Repartidores y asignaciones", icon: Truck, perms: ["COURIERS_VIEW", "COURIERS_MANAGE", "ASSIGNMENTS_MANAGE"] },
     { href: "/incidencias", label: "Incidencias", icon: TriangleAlert, perms: ["INCIDENTS_VIEW", "INCIDENTS_RESOLVE", "INCIDENTS_CREATE"] },
@@ -37,7 +39,7 @@ function useNav(): { operation: NavItem[]; admin: NavItem[] } {
     { href: "/configuracion", label: "Configuración", icon: Settings, perms: ["SETTINGS_MANAGE", "CATALOGS_MANAGE"] },
   ];
   if (!me) return { operation: [], admin: [] };
-  return { operation: operation.filter((i) => can(...i.perms)), admin: admin.filter((i) => can(...i.perms)) };
+  return { operation: operation.filter((i) => i.perms.length === 0 || can(...i.perms)), admin: admin.filter((i) => can(...i.perms)) };
 }
 
 function isActive(pathname: string, href: string) {
@@ -182,7 +184,14 @@ function ShellInner({ children }: { children: ReactNode }) {
           <UserMenu />
         </header>
         </div>
-        <main key={pathname} className="mx-auto max-w-[1440px] animate-fade-in px-4 pt-6 pb-28 sm:px-6 lg:px-8 lg:pt-8 lg:pb-12">{children}</main>
+        <main key={pathname} className="mx-auto max-w-[1440px] animate-fade-in px-4 pt-6 pb-28 sm:px-6 lg:px-8 lg:pt-8 lg:pb-12">
+          {pathname !== homeFor(me) && (
+            <Link href={homeFor(me)} className="mb-3 mr-5 inline-flex items-center gap-1 rounded-lg text-sm font-semibold text-muted hover:text-brand-600">
+              <ArrowLeft className="size-4" aria-hidden /> Volver al inicio
+            </Link>
+          )}
+          {children}
+        </main>
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden" aria-label="Navegación móvil">

@@ -70,16 +70,17 @@ export function GuidesList() {
           ) : (
             <>
               {/* Escritorio */}
-              <Table className="hidden md:block" head={["Folio", "Estado", "Ruta", "Consignatario", "Remitente", "Clave CD / pedido", "Piezas", "Elaborada"]}>
+              <Table className="hidden md:block" head={["Folio", "Estado", "Plazas / subruta", "Consignatario", "Remitente", "Ruta de embarque", "Pedido(s)", "Piezas", "Elaborada por"]}>
                 {data?.content.map((g) => (
                   <tr key={g.id} className="cursor-pointer hover:bg-canvas" onClick={() => router.push(`/guias/${g.id}`)}>
                     <td className="px-4 py-3"><Link href={`/guias/${g.id}`} className="font-mono font-semibold text-brand-700" onClick={(e) => e.stopPropagation()}>{g.reference}</Link></td>
                     <td className="px-4 py-3"><GuideStatusBadge status={g.status} size="sm" /></td>
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-[13px] font-semibold text-ink">{g.destinationCode ? `${g.originCode ?? "—"} → ${g.destinationCode}` : "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-3 font-mono text-[13px] font-semibold text-ink">{g.destinationCode ? `${g.originCode ?? "—"} → ${g.destinationCode}` : "—"}{g.subRoute && <span className="block text-[12px] text-brand-700">{g.subRoute}</span>}</td>
                     <td className="px-4 py-3"><p className="font-semibold text-ink">{g.recipientName}</p><p className="text-[13px] text-muted">{g.recipientCity ?? "—"}</p></td>
                     <td className="px-4 py-3 text-ink-soft">{g.senderName}</td>
-                    <td className="px-4 py-3 text-ink-soft">{[g.cdReference, g.orderReference].filter(Boolean).join(" / ") || "—"}</td>
-                    <td className="px-4 py-3">{g.packageCount}</td>
+                    <td className="px-4 py-3 text-[13px] text-ink-soft">{g.shippingRoute?.name ?? "—"}</td>
+                    <td className="px-4 py-3 text-ink-soft">{g.orderReference || "—"}</td>
+                    <td className="px-4 py-3">{g.packageCount ?? "—"}</td>
                     <td className="px-4 py-3 text-[13px] text-muted">{fmtDateTime(g.createdAt)}<br />{g.createdBy.name}</td>
                   </tr>
                 ))}

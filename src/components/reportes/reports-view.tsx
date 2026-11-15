@@ -14,7 +14,7 @@ import { Card, PageHeader } from "@/components/ui/primitives";
 import { StatCard } from "@/components/ui/stat-card";
 import { useToast } from "@/components/ui/toast";
 import { downloadFile, errorMessage } from "@/lib/api/client";
-import { useCouriers, useReportSummary, useSenders, useShifts } from "@/lib/api/hooks";
+import { useCouriers, useManifests, useReportSummary, useSenders, useShifts, useShippingRoutes } from "@/lib/api/hooks";
 import type { GuideStatus } from "@/lib/api/types";
 import { daysAgoKey, fmtDate, fmtNumber, todayKey } from "@/lib/format";
 import { useSession } from "@/lib/session";
@@ -33,10 +33,21 @@ export function ReportsView({ mode }: { mode: "dashboard" | "reports" }) {
   const [status, setStatus] = useState<GuideStatus | "">("");
   const [destination, setDestination] = useState("");
   const dDestination = useDebounced(destination.trim());
+  const [client, setClient] = useState("");
+  const [subRoute, setSubRoute] = useState("");
+  const [routeId, setRouteId] = useState("");
+  const [folio, setFolio] = useState("");
+  const [manifestId, setManifestId] = useState("");
+  const dClient = useDebounced(client.trim());
+  const dSub = useDebounced(subRoute.trim());
+  const dFolio = useDebounced(folio.trim());
+  const routes = useShippingRoutes();
+  const manifests = useManifests({}, general && can("MANIFESTS_VIEW", "MANIFESTS_MANAGE", "DISPATCH_AUTHORIZE", "DISPATCH_REGISTER"));
   const senders = useSenders({});
   const shifts = useShifts();
   const couriers = useCouriers(undefined, general && can("COURIERS_VIEW", "ASSIGNMENTS_MANAGE", "COURIERS_MANAGE"));
-  const params = { from, to, senderId: senderId || undefined, shiftId: shiftId || undefined, courierId: courierId || undefined, status: status || undefined, destination: dDestination || undefined };
+  const params = { from, to, senderId: senderId || undefined, shiftId: shiftId || undefined, courierId: courierId || undefined, status: status || undefined, destination: dDestination || undefined,
+    client: dClient || undefined, subRoute: dSub || undefined, shippingRouteId: routeId || undefined, folio: dFolio || undefined, manifestId: manifestId || undefined };
   const q = useReportSummary(params);
   const s = q.data;
 
@@ -63,7 +74,12 @@ export function ReportsView({ mode }: { mode: "dashboard" | "reports" }) {
         <Select value={shiftId} onChange={(e) => setShiftId(e.target.value)} aria-label="Turno"><option value="">Turno (todos)</option>{shifts.data?.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</Select>
         <Select value={status} onChange={(e) => setStatus(e.target.value as GuideStatus)} aria-label="Estado"><option value="">Estado (todos)</option>{GUIDE_STATUS_ORDER.map((x) => <option key={x} value={x}>{GUIDE_STATUS[x].label}</option>)}</Select>
         {couriers.data && <Select value={courierId} onChange={(e) => setCourierId(e.target.value)} aria-label="Repartidor"><option value="">Repartidor (todos)</option>{couriers.data.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>}
-        <Input className="col-span-2 sm:col-span-1" placeholder="Destino (ciudad/estado)" value={destination} onChange={(e) => setDestination(e.target.value)} aria-label="Destino" />
+        <Input placeholder="Destino (ciudad/estado/plaza)" value={destination} onChange={(e) => setDestination(e.target.value)} aria-label="Destino" />
+        <Input placeholder="Cliente" value={client} onChange={(e) => setClient(e.target.value)} aria-label="Cliente" />
+        <Select value={routeId} onChange={(e) => setRouteId(e.target.value)} aria-label="Ruta de embarque"><option value="">Ruta (todas)</option>{routes.data?.map((r) => <option key={r.id} value={r.id}>{r.code} · {r.name}</option>)}</Select>
+        <Input placeholder="Subruta (ej. CVA-01)" value={subRoute} className="uppercase" onChange={(e) => setSubRoute(e.target.value)} aria-label="Subruta" />
+        {manifests.data && <Select value={manifestId} onChange={(e) => setManifestId(e.target.value)} aria-label="Manifiesto"><option value="">Manifiesto (todos)</option>{manifests.data.content.map((m) => <option key={m.id} value={m.id}>{m.number}{m.shippingRoute ? ` · ${m.shippingRoute.name}` : ""}</option>)}</Select>}
+        <Input placeholder="Número de guía" value={folio} onChange={(e) => setFolio(e.target.value)} aria-label="Número de guía" />
       </Card>
       <QueryState loading={q.isLoading} error={q.error} onRetry={() => q.refetch()}>
         {s && (
@@ -117,9 +133,15 @@ export function ReportsView({ mode }: { mode: "dashboard" | "reports" }) {
               {general && (
                 <Card className="lg:col-span-2">
                   <div className="grid gap-0 md:grid-cols-2">
-                    <div className="p-5"><h3 className="mb-3 font-bold text-ink">Por repartidor</h3>
-                      <Table className="[&_table]:min-w-0" head={["Repartidor", "Asignadas", "Entregadas"]}>
-                        {s.byCourier.map((c) => <tr key={c.courier_id}><td className="px-4 py-2">{c.courier}</td><td className="px-4 py-2">{c.active_assignments}</td><td className="px-4 py-2">{c.delivered}</td></tr>)}
+                    <div className="p-5 md:col-span-2"><h3 className="mb-1 font-bold text-ink">Productividad por operador</h3>
+                      <p className="mb-3 text-[13px] text-muted">Guías asignadas y transportadas; de las entregadas en el periodo: guías, pedidos y piezas.</p>
+                      <Table className="[&_table]:min-w-0" head={["Operador", "Guías asignadas", "Transportadas", "Entregadas", "Pedidos entregados", "Piezas entregadas"]}>
+                        {s.byCourier.map((c) => <tr key={c.courier_id}><td className="px-4 py-2">{c.courier}</td><td className="px-4 py-2">{c.guides_assigned}</td><td className="px-4 py-2">{c.guides_transported}</td><td className="px-4 py-2">{c.delivered}</td><td className="px-4 py-2">{c.orders_delivered}</td><td className="px-4 py-2">{c.pieces_delivered}</td></tr>)}
+                      </Table>
+                    </div>
+                    <div className="p-5"><h3 className="mb-3 font-bold text-ink">Por usuario que elaboró</h3>
+                      <Table className="[&_table]:min-w-0" head={["Usuario", "Guías", "Confirmadas", "Pedidos", "Piezas"]}>
+                        {s.byCreator.map((u) => <tr key={u.user_id}><td className="px-4 py-2">{u.user_name}</td><td className="px-4 py-2">{u.guides}</td><td className="px-4 py-2">{u.confirmed}</td><td className="px-4 py-2">{u.orders}</td><td className="px-4 py-2">{u.pieces}</td></tr>)}
                       </Table>
                     </div>
                     <div className="p-5"><h3 className="mb-3 font-bold text-ink">Por remitente</h3>

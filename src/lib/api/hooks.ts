@@ -3,8 +3,9 @@
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
 import type {
-  Concept, Courier, CourierAssignment, CourierHistoryItem, Guide, GuideStatus, GuideSummary, Incident, Manifest,
-  ManifestSummary, Page, PermissionInfo, Recipient, ReportSummary, RoleInfo, Sender, ServiceOption, Shift, UserAccount,
+  Concept, Courier, CourierAssignment, CourierHistoryItem, DayStatus, Guide, GuideStatus, GuideSummary, Incident, Manifest,
+  ManifestSummary, Page, PermissionInfo, Recipient, ReportSummary, RoleInfo, RouteOverview, Sender, ServiceOption, Shift,
+  ShippingRoute, UserAccount,
 } from "./types";
 
 /** Claves de caché: invalidar un prefijo refresca todas las vistas relacionadas. */
@@ -19,11 +20,13 @@ export const qk = {
   users: ["users"] as const,
   senders: ["senders"] as const,
   catalogs: ["catalogs"] as const,
+  routes: ["routes"] as const,
 };
 
 export interface GuideFilters {
   q?: string; status?: GuideStatus[]; senderId?: number; shiftId?: number; courierId?: number; mine?: boolean;
   from?: string; to?: string; withoutManifest?: boolean; page?: number; size?: number;
+  folio?: string; client?: string; subRoute?: string; shippingRouteId?: number; manifestId?: number;
 }
 
 export function useGuides(f: GuideFilters) {
@@ -71,8 +74,9 @@ export function useCouriers(active?: boolean, enabled = true) {
   return useQuery({ queryKey: [...qk.couriers, active], queryFn: () => api.get<Courier[]>("/couriers", { active }), enabled });
 }
 
-export function useManifests(params: { status?: string; shiftId?: number; senderId?: number; from?: string; to?: string; page?: number }) {
+export function useManifests(params: { status?: string; shiftId?: number; senderId?: number; shippingRouteId?: number; from?: string; to?: string; page?: number }, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: [...qk.manifests, "list", params],
     queryFn: () => api.get<Page<ManifestSummary>>("/manifests", params),
     placeholderData: keepPreviousData,
@@ -83,7 +87,7 @@ export function useManifest(id: number | null) {
   return useQuery({ queryKey: [...qk.manifests, "detail", id], queryFn: () => api.get<Manifest>(`/manifests/${id}`), enabled: id != null });
 }
 
-export function useEligibleGuides(params: { shiftId?: number; senderId?: number; from?: string; to?: string; q?: string }) {
+export function useEligibleGuides(params: { shiftId?: number; senderId?: number; from?: string; to?: string; q?: string; shippingRouteId?: number }) {
   return useQuery({
     queryKey: [...qk.manifests, "eligible", params],
     queryFn: () => api.get<Page<GuideSummary>>("/manifests/eligible-guides", { ...params, size: 200 }),
@@ -127,6 +131,20 @@ export function usePermissionCatalog(enabled = true) {
   return useQuery({ queryKey: [...qk.users, "permissions"], queryFn: () => api.get<PermissionInfo[]>("/permissions"), enabled, staleTime: Infinity });
 }
 
+/** Catálogo de rutas de embarque. */
+export function useShippingRoutes(active?: boolean) {
+  return useQuery({ queryKey: [...qk.routes, "list", active], queryFn: () => api.get<ShippingRoute[]>("/shipping-routes", { active }), staleTime: 60_000 });
+}
+
+export function useRouteOverview(enabled = true) {
+  return useQuery({ queryKey: [...qk.routes, "overview"], queryFn: () => api.get<RouteOverview[]>("/shipping-routes/overview"), enabled });
+}
+
+/** Guías del día (entregadas / en tránsito / pendientes) del remitente del usuario. */
+export function useDayStatus(params: { date?: string; senderId?: number } = {}, enabled = true) {
+  return useQuery({ queryKey: [...qk.reports, "today", params], queryFn: () => api.get<DayStatus>("/reports/today", params), enabled, refetchInterval: 120_000 });
+}
+
 /** Invalida todo lo relacionado con la operación de guías tras una mutación. */
 export function useInvalidateOperation() {
   const qc = useQueryClient();
@@ -138,5 +156,6 @@ export function useInvalidateOperation() {
       qc.invalidateQueries({ queryKey: qk.reports }),
       qc.invalidateQueries({ queryKey: qk.courierMe }),
       qc.invalidateQueries({ queryKey: qk.couriers }),
+      qc.invalidateQueries({ queryKey: qk.routes }),
     ]);
 }

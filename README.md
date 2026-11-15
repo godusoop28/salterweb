@@ -28,16 +28,19 @@ Navegador ──► https://frontend/api/*  ──(rewrite de Next.js)──► 
 
 ## Pantallas y navegación por rol
 
-Hay sólo **4 roles**: **Administrador** (administrador general), **Remitente** (elabora sus guías y consulta sus envíos), **Receptor** (confirma la llegada a destino) y **Repartidor** (entrega). El menú se construye con los **permisos** que devuelve la API; no se muestran opciones sin acceso.
+Roles: **Administrador**, **Operaciones** (rutas, manifiestos, Viaja/No viaja, despacho, operadores), **Encargado** (autoriza salidas), **Remitente** (elabora sus guías y consulta sus envíos), **Receptor** (confirma la llegada a destino) y **Repartidor** (entrega). El menú se construye con los **permisos** que devuelve la API; no se muestran opciones sin acceso.
 
 | Ruta | Módulo | Quién la ve (por defecto) |
 |---|---|---|
 | `/login` | Inicio de sesión real | Todos |
 | `/dashboard` | Indicadores del backend | Admin |
-| `/guias/nueva` | Captura rápida de guías (teclado, alta inline, duplicados, borrador/confirmación) | Remitente, Admin |
+| `/inicio` | Portal del cliente: gráfica del día (entregadas / en tránsito / pendientes) | Remitente |
+| `/guias/nueva` | Captura con carrito de bultos (cantidad vacía), NO APLICA, subruta, ruta de embarque, revisión y confirmación explícita (Enter no confirma) | Remitente, Admin |
+| `/guias/importar` | Reporte de carga (Excel): tabla editable, validación, resumen y generación masiva idempotente | Remitente, Admin |
+| `/rutas` | Rutas de embarque: manifiesto en preparación, guías por estado, alta/edición | Operaciones, Admin, Encargado (consulta) |
 | `/guias`, `/guias/[id]` | Guías / mis guías / mis envíos, detalle, historial, acciones y PDF | Según alcance |
 | `/destinatarios` | Catálogo, búsqueda sin acentos, importación Excel/CSV con correspondencia de columnas | Remitente (los suyos), Admin |
-| `/manifiestos` | Elaboración, cierre, reapertura y **autorización de salida** | Admin |
+| `/manifiestos` | Por ruta de embarque: revisión con totales, Viaja/No viaja, cierre, **autorización** (encargado) y **despacho**, PDF | Operaciones, Encargado, Admin |
 | `/recepcion` | Recepción por folio (compatible con lector de códigos) | Receptor, Admin |
 | `/repartidores` | Repartidores y asignación de guías | Admin |
 | `/incidencias` | Seguimiento y resolución | Admin (otros: las propias) |
