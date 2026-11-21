@@ -39,7 +39,8 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
 }
 
 async function request<T>(method: string, path: string, body?: unknown, init?: { query?: Query; raw?: boolean }): Promise<T> {
-  const headers: Record<string, string> = { "X-Requested-With": "salter-web", Accept: "application/json" };
+  // Para archivos (PDF/CSV/XLSX) no se pide JSON: los endpoints de PDF sólo producen application/pdf y responderían 406.
+  const headers: Record<string, string> = { "X-Requested-With": "salter-web", Accept: init?.raw ? "*/*" : "application/json" };
   let payload: BodyInit | undefined;
   if (body instanceof FormData) payload = body;
   else if (body !== undefined) {
@@ -80,11 +81,20 @@ export const api = {
 
 /** Descarga un archivo (PDF, CSV, XLSX) generado por la API respetando la sesión. */
 export async function downloadFile(path: string, filename: string, query?: Query, openInTab = false) {
-  const blob = await api.blob(path, query);
+  // La pestaña se abre ANTES de esperar la respuesta para que el navegador no la bloquee como ventana emergente.
+  const tab = openInTab ? window.open("", "_blank") : null;
+  let blob: Blob;
+  try {
+    blob = await api.blob(path, query);
+  } catch (e) {
+    tab?.close();
+    throw e;
+  }
   const url = URL.createObjectURL(blob);
-  if (openInTab) {
-    window.open(url, "_blank", "noopener");
+  if (tab && !tab.closed) {
+    tab.location.href = url;
   } else {
+    // Sin pestaña (descarga normal o ventana bloqueada): se guarda el archivo.
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
@@ -92,7 +102,7 @@ export async function downloadFile(path: string, filename: string, query?: Query
     a.click();
     a.remove();
   }
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  setTimeout(() => URL.revokeObjectURL(url), 120_000);
 }
 
 export function errorMessage(e: unknown): string {

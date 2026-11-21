@@ -12,25 +12,42 @@ import { useSession } from "@/lib/session";
 type Variant = "CLIENTE" | "INTERNA";
 type Size = "LETTER" | "LABEL_4X6";
 
-/** Imprime un PDF dentro de la página (iframe oculto) sin abrir pestañas ni ventanas emergentes. */
+/** En móviles/tabletas y Safari no se puede imprimir un PDF desde un iframe: se abre en pestaña para usar «Imprimir» del visor. */
+function iframePrintUnsupported() {
+  const ua = navigator.userAgent;
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
+  const safari = /Safari/.test(ua) && !/Chrome|Chromium|CriOS|Edg|Firefox|FxiOS/.test(ua);
+  return mobile || safari;
+}
+
+/** Imprime un PDF dentro de la página (iframe oculto) sin abrir pestañas; si el navegador no lo permite, lo abre en una pestaña. */
 export async function printPdf(path: string, query?: Record<string, string>) {
+  if (iframePrintUnsupported()) {
+    await downloadFile(path, "documento.pdf", query, true);
+    return;
+  }
   const blob = await api.blob(path, query);
   const url = URL.createObjectURL(blob);
   const frame = document.createElement("iframe");
+  // Fuera de pantalla pero con tamaño real: algunos navegadores imprimen en blanco un iframe de 0×0.
   frame.style.position = "fixed";
-  frame.style.right = "0";
-  frame.style.bottom = "0";
-  frame.style.width = "0";
-  frame.style.height = "0";
+  frame.style.left = "-10000px";
+  frame.style.top = "0";
+  frame.style.width = "800px";
+  frame.style.height = "600px";
   frame.style.border = "0";
+  frame.setAttribute("aria-hidden", "true");
   frame.src = url;
   frame.onload = () => {
-    try {
-      frame.contentWindow?.focus();
-      frame.contentWindow?.print();
-    } catch {
-      window.open(url, "_blank", "noopener");
-    }
+    // Pequeña espera para que el visor de PDF termine de cargar antes de imprimir.
+    setTimeout(() => {
+      try {
+        frame.contentWindow?.focus();
+        frame.contentWindow?.print();
+      } catch {
+        window.open(url, "_blank");
+      }
+    }, 400);
   };
   document.body.appendChild(frame);
   setTimeout(() => { frame.remove(); URL.revokeObjectURL(url); }, 120_000);
