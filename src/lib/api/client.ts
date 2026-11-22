@@ -77,7 +77,21 @@ export const api = {
   put: <T>(path: string, body?: unknown, query?: Query) => request<T>("PUT", path, body, { query }),
   del: <T>(path: string, query?: Query) => request<T>("DELETE", path, undefined, { query }),
   blob: (path: string, query?: Query) => request<Blob>("GET", path, undefined, { query, raw: true }),
+  /** Archivo generado a partir de un cuerpo JSON (ej. resumen de una importación que aún no se guarda). */
+  blobPost: (path: string, body: unknown, query?: Query) => request<Blob>("POST", path, body, { query, raw: true }),
 };
+
+/** Guarda un archivo ya descargado con el nombre indicado. */
+export function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 120_000);
+}
 
 /** Descarga un archivo (PDF, CSV, XLSX) generado por la API respetando la sesión. */
 export async function downloadFile(path: string, filename: string, query?: Query, openInTab = false) {

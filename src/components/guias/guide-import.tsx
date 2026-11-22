@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Fragment, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { ChevronDown, CircleCheck, CircleX, FileSpreadsheet, LoaderCircle, Plus, Trash2, TriangleAlert, Upload } from "lucide-react";
+import { ChevronDown, CircleCheck, CircleX, FileSpreadsheet, FileText, LoaderCircle, Plus, Trash2, TriangleAlert, Upload } from "lucide-react";
 import { InlineError } from "@/components/app/common";
 import { Badge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/overlay";
 import { Card } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/toast";
-import { api, errorMessage } from "@/lib/api/client";
+import { api, errorMessage, saveBlob } from "@/lib/api/client";
 import { useInvalidateOperation, useSenders, useShippingRoutes } from "@/lib/api/hooks";
 import type { Address, Recipient } from "@/lib/api/types";
 import { printedFolio } from "@/lib/format";
@@ -67,6 +67,7 @@ export function GuideImport() {
   const [routeOverride, setRouteOverride] = useState<{ id: number; reason: string } | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [result, setResult] = useState<CommitResult | null>(null);
+  const [summaryBusy, setSummaryBusy] = useState<"PDF" | "XLSX" | null>(null);
   const confirm = can("GUIDES_CONFIRM");
   const canReroute = can("ROUTES_REASSIGN");
 
@@ -150,6 +151,40 @@ export function GuideImport() {
       else toast.error(`${res.created} creadas · ${res.rejected} rechazadas`, "Revisa el detalle por renglón.");
     },
   });
+
+  /** Resumen (PDF o Excel) de las guías estimadas, con lo capturado en la tabla, ANTES de confirmarlas. No guarda nada. */
+  async function downloadSummary(format: "PDF" | "XLSX") {
+    if (!preview) return;
+    setSummaryBusy(format);
+    try {
+      const blob = await api.blobPost("/guides/import/summary", {
+        senderId: preview.senderId, fileName: preview.fileName, load: preview.load, declaredPackages: preview.declaredPackages,
+        shippingRoute: routeLabel ? `${routeLabel.code} · ${routeLabel.name}` : undefined, excludedPieces,
+        rows: selected.map((g) => {
+          const r = rows[g.requestId];
+          return {
+            clientName: r.clientName.trim(), orders: r.orders.trim().slice(0, 200), city: r.address.city, state: r.address.state,
+            destinationCode: destOf(g) || undefined, subRoute: r.subRoute || undefined, newClient: r.recipientId === "new",
+            items: r.items.filter((i) => i.type.trim() && qty(i.qty) > 0).map((i) => ({ type: i.type.trim(), quantity: qty(i.qty) })),
+          };
+        }),
+      }, { format });
+      const base = (preview.fileName.replace(/\.[^.]+$/, "") || "carga").replace(/[^\w-]+/g, "_");
+      saveBlob(blob, `resumen-${base}.${format === "PDF" ? "pdf" : "xlsx"}`);
+    } catch (e) {
+      toast.error("No se pudo generar el resumen", errorMessage(e));
+    } finally {
+      setSummaryBusy(null);
+    }
+  }
+  const summaryButtons = (
+    <>
+      <Button variant="outline" icon={<FileText className="size-4" />} loading={summaryBusy === "PDF"} disabled={!!summaryBusy || selected.length === 0}
+        onClick={() => void downloadSummary("PDF")}>Resumen PDF</Button>
+      <Button variant="outline" icon={<FileSpreadsheet className="size-4" />} loading={summaryBusy === "XLSX"} disabled={!!summaryBusy || selected.length === 0}
+        onClick={() => void downloadSummary("XLSX")}>Resumen Excel</Button>
+    </>
+  );
 
   const resultFor = (id: string) => result?.rows.find((r) => r.requestId === id);
   const locked = commit.isPending || !!result;
@@ -354,6 +389,7 @@ export function GuideImport() {
             <div className="flex flex-wrap gap-2">
               {result && <ButtonLink href="/guias" variant="outline">Ver guías</ButtonLink>}
               {result && <Button variant="outline" onClick={() => { setPreview(null); setResult(null); }}>Importar otro archivo</Button>}
+              {!result && summaryButtons}
               {!result && (
                 <Button size="lg" icon={<CircleCheck className="size-5" />} disabled={selected.length === 0 || withProblems.length > 0 || (routeChanged && !routeOverride?.reason.trim())}
                   onClick={() => setReviewOpen(true)}>
@@ -378,6 +414,10 @@ export function GuideImport() {
               <li>{keepLpn ? "Se guardan los LPN de cada bulto." : "No se guardan los LPN."}</li>
               {groups.filter((g) => g.existingFolio && !rows[g.requestId]?.include).length > 0 && <li className="text-accent-700">{groups.filter((g) => g.existingFolio && !rows[g.requestId]?.include).length} clientes ya tienen guía y no se volverán a generar.</li>}
             </ul>
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line-soft pt-3">
+              <span className="text-[13px] text-muted">Resumen de las guías estimadas (antes de confirmar):</span>
+              {summaryButtons}
+            </div>
             <div className="mt-3"><InlineError message={commit.error ? errorMessage(commit.error) : null} /></div>
           </Modal>
         </>
