@@ -22,8 +22,10 @@ interface PackageLine { lpn?: string; type: string; order?: string }
 interface ImportGroup {
   requestId: string; clientName: string; orders: string[]; addressText: string; address: Address; packages: number;
   types: { name: string; quantity: number }[]; lpns: string[]; route?: string; notes?: string;
-  matchType?: "EXACT" | "WORDS"; recipient?: Recipient; suggestions?: Recipient[]; existingGuideId?: number; existingFolio?: string;
+  matchType?: "EXACT" | "WORDS" | "PROBABLE"; recipient?: Recipient; suggestions?: Recipient[]; existingGuideId?: number; existingFolio?: string;
   duplicateOrders?: string[]; packageLines: PackageLine[];
+  /** Cliente nuevo: subruta que tienen todos los clientes del catálogo del mismo municipio y ruta. */
+  suggestedSubRoute?: string;
 }
 interface ImportPreview {
   fileName: string; senderId: number; senderName: string; load?: string; route?: string; declaredPackages?: number;
@@ -39,6 +41,8 @@ interface CommitResult { batchId: number; created: number; skipped: number; excl
 
 const plaza = (v: string) => v.replace(/[^a-zA-Z]/g, "").slice(0, 5).toUpperCase();
 const qty = (s: string) => (/^\d+$/.test(s) ? Number(s) : 0);
+/** "CVA-01" → "CVA" (misma regla que la API). */
+const plazaOfSubRoute = (sub?: string) => sub?.match(/^[A-Za-z]{2,5}/)?.[0].toUpperCase() ?? "";
 const OUTCOME: Record<CommitRow["outcome"], { label: string; tone: "green" | "orange" | "red" | "slate" }> = {
   CREATED: { label: "Creada", tone: "green" }, SKIPPED_EXISTING: { label: "Ya existía", tone: "orange" },
   SKIPPED_DUPLICATE: { label: "Duplicada (omitida)", tone: "orange" }, EXCLUDED: { label: "No seleccionada", tone: "slate" },
@@ -89,8 +93,8 @@ export function GuideImport() {
         orders: g.orders.join(", "),
         address: g.address ?? {},
         route: g.route ?? "",
-        subRoute: g.recipient?.subRoute ?? "",
-        destination: g.recipient?.destinationCode ?? "",
+        subRoute: g.recipient?.subRoute ?? g.suggestedSubRoute ?? "",
+        destination: g.recipient?.destinationCode ?? plazaOfSubRoute(g.suggestedSubRoute),
         items: g.types.map((t) => ({ type: t.name, qty: String(t.quantity) })),
         notes: g.notes ?? "",
         allowDuplicate: false,
@@ -162,8 +166,9 @@ export function GuideImport() {
         shippingRoute: routeLabel ? `${routeLabel.code} · ${routeLabel.name}` : undefined, excludedPieces,
         rows: selected.map((g) => {
           const r = rows[g.requestId];
+          const rec = r.recipientId === "new" ? undefined : [g.recipient, ...(g.suggestions ?? [])].find((x) => x?.id === r.recipientId);
           return {
-            clientName: r.clientName.trim(), orders: r.orders.trim().slice(0, 200), city: r.address.city, state: r.address.state,
+            clientCode: rec?.clientCode, route: r.route || undefined, clientName: r.clientName.trim(), orders: r.orders.trim().slice(0, 200), city: r.address.city, state: r.address.state,
             destinationCode: destOf(g) || undefined, subRoute: r.subRoute || undefined, newClient: r.recipientId === "new",
             items: r.items.filter((i) => i.type.trim() && qty(i.qty) > 0).map((i) => ({ type: i.type.trim(), quantity: qty(i.qty) })),
           };
@@ -294,12 +299,17 @@ export function GuideImport() {
                                 onChange={(e) => {
                                   const id = e.target.value === "new" ? "new" : Number(e.target.value);
                                   const rec = options.find((o) => o.id === id);
-                                  set(g.requestId, { recipientId: id, subRoute: rec?.subRoute ?? r.subRoute, destination: rec?.destinationCode ?? r.destination });
+                                  set(g.requestId, id === "new" && g.suggestedSubRoute
+                                    ? { recipientId: id, subRoute: g.suggestedSubRoute, destination: plazaOfSubRoute(g.suggestedSubRoute) }
+                                    : { recipientId: id, subRoute: rec?.subRoute ?? r.subRoute, destination: rec?.destinationCode ?? r.destination });
                                 }}>
                                 <option value="new">Cliente nuevo (se da de alta)</option>
-                                {options.map((o) => <option key={o.id} value={o.id}>{g.recipient?.id === o.id && g.matchType === "EXACT" ? "En catálogo: " : "Es: "}{o.fullName}{o.subRoute ? ` · ${o.subRoute}` : ""}</option>)}
+                                {options.map((o) => <option key={o.id} value={o.id}>{g.recipient?.id === o.id && g.matchType === "EXACT" ? "En catálogo: " : g.recipient?.id === o.id && g.matchType === "PROBABLE" ? "Probable (mismo C.P.): " : "Es: "}{o.fullName}{o.subRoute ? ` · ${o.subRoute}` : ""}</option>)}
                               </Select>
                             ) : <p className="mt-1 text-[12px] text-accent-700">Cliente nuevo: se dará de alta</p>}
+                            {r.recipientId === "new" && g.suggestedSubRoute && r.subRoute === g.suggestedSubRoute && (
+                              <p className="mt-1 text-[12px] text-muted">Subruta {g.suggestedSubRoute} sugerida por municipio ({r.address.city})</p>
+                            )}
                             <button type="button" className="mt-1 inline-flex items-center gap-1 text-[12px] font-semibold text-brand-700" onClick={() => setExpanded(open ? null : g.requestId)}>
                               <ChevronDown className={cn("size-3.5 transition", open && "rotate-180")} /> Dirección, ruta y notas
                             </button>
@@ -354,7 +364,7 @@ export function GuideImport() {
                               <div className="grid gap-3 pt-2 sm:grid-cols-3">
                                 <Field label="Calle y número"><Input value={r.address.street ?? ""} disabled={locked} onChange={(e) => set(g.requestId, { address: { ...r.address, street: e.target.value } })} /></Field>
                                 <Field label="Colonia"><Input value={r.address.neighborhood ?? ""} disabled={locked} onChange={(e) => set(g.requestId, { address: { ...r.address, neighborhood: e.target.value } })} /></Field>
-                                <Field label="Ciudad"><Input value={r.address.city ?? ""} disabled={locked} onChange={(e) => set(g.requestId, { address: { ...r.address, city: e.target.value } })} /></Field>
+                                <Field label="Ciudad / municipio"><Input value={r.address.city ?? ""} disabled={locked} onChange={(e) => set(g.requestId, { address: { ...r.address, city: e.target.value } })} /></Field>
                                 <Field label="Estado"><Input value={r.address.state ?? ""} disabled={locked} onChange={(e) => set(g.requestId, { address: { ...r.address, state: e.target.value } })} /></Field>
                                 <Field label="C.P."><Input value={r.address.zip ?? ""} maxLength={5} disabled={locked} onChange={(e) => set(g.requestId, { address: { ...r.address, zip: e.target.value.replace(/\D/g, "") } })} /></Field>
                                 <Field label="Ruta del cliente" hint="Ruta del listado del remitente (no es la ruta de embarque)"><Input value={r.route} maxLength={20} disabled={locked} onChange={(e) => set(g.requestId, { route: e.target.value })} /></Field>

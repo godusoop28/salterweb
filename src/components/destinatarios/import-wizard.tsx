@@ -115,7 +115,7 @@ export function ImportWizard({ senderId, senderName, onClose }: { senderId: numb
             </div>
             <div className="overflow-x-auto rounded-2xl border border-line">
               <table className="w-full text-[13px]">
-                <thead className="bg-canvas"><tr>{["Fila", "# Cliente", "Nombre", "Calle", "Ciudad", "C.P.", "Subruta"].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr></thead>
+                <thead className="bg-canvas"><tr>{["Fila", "# Cliente", "Nombre", "Calle", "Municipio", "C.P.", "Subruta"].map((h) => <th key={h} className="px-3 py-2 text-left">{h}</th>)}</tr></thead>
                 <tbody>{rows.slice(0, 5).map((r) => <tr key={r.rowNumber} className="border-t border-line-soft"><td className="px-3 py-1.5">{r.rowNumber}</td><td className="px-3">{r.clientCode}</td><td className="px-3">{[r.firstName, r.lastName].filter(Boolean).join(" ")}</td><td className="px-3">{[r.street, r.extNumber].filter(Boolean).join(" ")}</td><td className="px-3">{r.city}</td><td className="px-3">{r.zip}</td><td className="px-3">{r.subRoute}</td></tr>)}</tbody>
               </table>
             </div>

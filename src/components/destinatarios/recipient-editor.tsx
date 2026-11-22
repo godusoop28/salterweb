@@ -65,7 +65,7 @@ export function RecipientEditor({ recipient, senderId, onClose, onSaved, initial
         <Field label="Correo"><Input value={f.email} onChange={set("email")} type="email" /></Field>
         <Field label="Calle y número" className="sm:col-span-2"><Input value={f.street} onChange={set("street")} /></Field>
         <Field label="Colonia"><Input value={f.neighborhood} onChange={set("neighborhood")} /></Field>
-        <Field label="Ciudad"><Input value={f.city} onChange={set("city")} /></Field>
+        <Field label="Ciudad / municipio"><Input value={f.city} onChange={set("city")} /></Field>
         <Field label="Estado"><Input value={f.state} onChange={set("state")} /></Field>
         <Field label="C.P."><Input value={f.zip} onChange={set("zip")} maxLength={5} inputMode="numeric" /></Field>
         <Field label="Ruta"><Input value={f.route} onChange={set("route")} placeholder="Ej. 74" /></Field>
