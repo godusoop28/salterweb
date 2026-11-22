@@ -100,6 +100,11 @@ function Detail({ g, onAction, onEdit, onConfirm, confirming, onRoute, onCorrect
           <GuidePrintButtons guide={g} />
         </Card>
       )}
+      {g.status === "BORRADOR" && (
+        <Card className="mb-5 p-4 text-sm text-muted">
+          <span className="font-semibold text-ink">Documento de la guía:</span> se puede imprimir o descargar en PDF una vez que la guía se confirma y recibe su folio.
+        </Card>
+      )}
 
       <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
         <div className="space-y-5">

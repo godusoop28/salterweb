@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, Eye, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/form";
@@ -64,6 +64,21 @@ export function GuidePrintButtons({ guide, compact = false }: { guide: Pick<Guid
   const [variant, setVariant] = useState<Variant>("CLIENTE");
   const [size, setSize] = useState<Size>("LETTER");
   const [busy, setBusy] = useState<"preview" | "print" | "download" | null>(null);
+  // Ctrl+P / Cmd+P en esta pantalla imprime la guía con el formato oficial (no la página web).
+  useEffect(() => {
+    if (!guide.folio) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== "p") return;
+      e.preventDefault();
+      if (busy) return;
+      setBusy("print");
+      printPdf(`/guides/${guide.id}/pdf`, { variant, size })
+        .catch((err) => toast.error("No se pudo generar el documento", errorMessage(err)))
+        .finally(() => setBusy(null));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [guide.id, guide.folio, variant, size, busy, toast]);
   if (!guide.folio) return null;
   const path = `/guides/${guide.id}/pdf`;
   const query = { variant, size };
