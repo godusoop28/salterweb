@@ -55,7 +55,7 @@ export async function printPdf(path: string, query?: Record<string, string>) {
 
 /**
  * Vista previa, impresión y descarga de la guía.
- * Versión «Cliente»: SIN datos de quien recibe (nombre, domicilio, teléfono, firma). «Interna»: sólo personal operativo.
+ * Versión «Cliente»: formato oficial con consignatario y nombre/firma (sin teléfono). «Interna»: agrega el teléfono, sólo personal operativo.
  */
 export function GuidePrintButtons({ guide, compact = false }: { guide: Pick<Guide, "id" | "folio" | "allowedActions">; compact?: boolean }) {
   const { can } = useSession();
@@ -100,8 +100,8 @@ export function GuidePrintButtons({ guide, compact = false }: { guide: Pick<Guid
     <div className="flex flex-wrap items-center gap-2">
       {canInternal && (
         <Select className="h-9 w-auto text-sm" value={variant} onChange={(e) => setVariant(e.target.value as Variant)} aria-label="Versión del documento">
-          <option value="CLIENTE">Versión cliente (sin datos de quien recibe)</option>
-          <option value="INTERNA">Versión interna (completa)</option>
+          <option value="CLIENTE">Versión cliente (sin teléfono)</option>
+          <option value="INTERNA">Versión interna (con teléfono)</option>
         </Select>
       )}
       <Select className="h-9 w-auto text-sm" value={size} onChange={(e) => setSize(e.target.value as Size)} aria-label="Tamaño">
